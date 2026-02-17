@@ -1,13 +1,9 @@
 package handlers
 
 import (
-	"crypto/sha256"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
-	"strconv"
-	"syscall"
 
 	"github.com/typedduck/nestor/agent/executor"
 )
@@ -74,7 +70,7 @@ func (h *FileContentHandler) Execute(action executor.Action,
 
 	if exists && sameContent {
 		// File exists with correct content, just update permissions if needed
-		if err := h.setPermissions(fs, destination, owner, group, mode); err != nil {
+		if err := setPermissions(fs, destination, owner, group, mode); err != nil {
 			return executor.ActionResult{
 				Status:  "failed",
 				Changed: false,
@@ -111,7 +107,7 @@ func (h *FileContentHandler) Execute(action executor.Action,
 	}
 
 	// Set permissions
-	if err := h.setPermissions(fs, destination, owner, group, mode); err != nil {
+	if err := setPermissions(fs, destination, owner, group, mode); err != nil {
 		return executor.ActionResult{
 			Status:  "failed",
 			Changed: true, // File was created but permissions failed
@@ -133,7 +129,8 @@ func (h *FileContentHandler) Execute(action executor.Action,
 }
 
 // checkFile checks if a file exists and has the same content
-func (h *FileContentHandler) checkFile(fs executor.FileSystem, path, content string) (exists bool, sameContent bool, err error) {
+func (h *FileContentHandler) checkFile(fs executor.FileSystem,
+	path, content string) (exists bool, sameContent bool, err error) {
 	data, err := fs.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -144,86 +141,4 @@ func (h *FileContentHandler) checkFile(fs executor.FileSystem, path, content str
 
 	// File exists, check if content is the same
 	return true, string(data) == content, nil
-}
-
-// setPermissions sets the owner, group, and mode for a file
-func (h *FileContentHandler) setPermissions(fs executor.FileSystem, path, owner, group, modeStr string) error {
-	// Set mode
-	if modeStr != "" {
-		mode, err := strconv.ParseUint(modeStr, 8, 32)
-		if err != nil {
-			return fmt.Errorf("invalid mode: %s", modeStr)
-		}
-		if err := fs.Chmod(path, os.FileMode(mode)); err != nil {
-			return fmt.Errorf("chmod failed: %w", err)
-		}
-	}
-
-	// Set owner and group
-	if owner != "" || group != "" {
-		if err := h.chown(fs, path, owner, group); err != nil {
-			return fmt.Errorf("chown failed: %w", err)
-		}
-	}
-
-	return nil
-}
-
-// chown changes the owner and group of a file
-func (h *FileContentHandler) chown(fs executor.FileSystem, path, owner, group string) error {
-	// Get current file info
-	stat, err := fs.Stat(path)
-	if err != nil {
-		return err
-	}
-
-	sys := stat.Sys().(*syscall.Stat_t)
-	uid := int(sys.Uid)
-	gid := int(sys.Gid)
-
-	// Look up owner UID if specified
-	if owner != "" {
-		// TODO: Implement user lookup
-		// For now, assume owner is already a numeric UID
-		if ownerUID, err := strconv.Atoi(owner); err == nil {
-			uid = ownerUID
-		}
-	}
-
-	// Look up group GID if specified
-	if group != "" {
-		// TODO: Implement group lookup
-		// For now, assume group is already a numeric GID
-		if groupGID, err := strconv.Atoi(group); err == nil {
-			gid = groupGID
-		}
-	}
-
-	return fs.Chown(path, uid, gid)
-}
-
-// getStringParam gets a string parameter with a default value
-func getStringParam(params map[string]interface{}, key, defaultValue string) string {
-	if val, ok := params[key]; ok {
-		if strVal, ok := val.(string); ok {
-			return strVal
-		}
-	}
-	return defaultValue
-}
-
-// computeFileHash computes the SHA256 hash of a file
-func computeFileHash(fs executor.FileSystem, path string) (string, error) {
-	f, err := fs.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }

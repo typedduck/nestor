@@ -76,7 +76,7 @@ func (h *DirectoryCreateHandler) Execute(action executor.Action,
 		}
 
 		// Directory exists, update permissions if needed
-		if err := h.setPermissions(fs, path, owner, group, modeStr); err != nil {
+		if err := setPermissions(fs, path, owner, group, modeStr); err != nil {
 			return executor.ActionResult{
 				Status:  "failed",
 				Changed: false,
@@ -109,7 +109,7 @@ func (h *DirectoryCreateHandler) Execute(action executor.Action,
 	}
 
 	// Set ownership
-	if err := h.setPermissions(fs, path, owner, group, modeStr); err != nil {
+	if err := setPermissions(fs, path, owner, group, modeStr); err != nil {
 		return executor.ActionResult{
 			Status:  "failed",
 			Changed: true, // Directory was created but permissions failed
@@ -123,59 +123,4 @@ func (h *DirectoryCreateHandler) Execute(action executor.Action,
 		Changed: true,
 		Message: fmt.Sprintf("Created directory %s", path),
 	}
-}
-
-// setPermissions sets the owner, group, and mode for a directory
-func (h *DirectoryCreateHandler) setPermissions(fs executor.FileSystem, path, owner, group, modeStr string) error {
-	// Set mode
-	if modeStr != "" {
-		mode, err := strconv.ParseUint(modeStr, 8, 32)
-		if err != nil {
-			return fmt.Errorf("invalid mode: %s", modeStr)
-		}
-		if err := fs.Chmod(path, os.FileMode(mode)); err != nil {
-			return fmt.Errorf("chmod failed: %w", err)
-		}
-	}
-
-	// Set owner and group
-	if owner != "" || group != "" {
-		if err := h.chown(fs, path, owner, group); err != nil {
-			return fmt.Errorf("chown failed: %w", err)
-		}
-	}
-
-	return nil
-}
-
-// chown changes the owner and group of a directory
-func (h *DirectoryCreateHandler) chown(fs executor.FileSystem, path, owner, group string) error {
-	// Get current directory info
-	_, err := fs.Stat(path)
-	if err != nil {
-		return err
-	}
-
-	// TODO: Implement proper user/group lookup
-	// For now, this is a simplified version
-	uid := -1
-	gid := -1
-
-	if owner != "" {
-		if ownerUID, err := strconv.Atoi(owner); err == nil {
-			uid = ownerUID
-		}
-	}
-
-	if group != "" {
-		if groupGID, err := strconv.Atoi(group); err == nil {
-			gid = groupGID
-		}
-	}
-
-	if uid != -1 || gid != -1 {
-		return fs.Chown(path, uid, gid)
-	}
-
-	return nil
 }

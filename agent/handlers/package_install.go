@@ -16,7 +16,8 @@ func NewPackageInstallHandler() *PackageInstallHandler {
 }
 
 // Execute installs packages using the system package manager
-func (h *PackageInstallHandler) Execute(action executor.Action, context *executor.ExecutionContext) executor.ActionResult {
+func (h *PackageInstallHandler) Execute(action executor.Action,
+	context *executor.ExecutionContext) executor.ActionResult {
 	// Extract parameters
 	packagesInterface, ok := action.Params["packages"]
 	if !ok {
@@ -31,7 +32,7 @@ func (h *PackageInstallHandler) Execute(action executor.Action, context *executo
 	// Convert packages to string slice
 	var packages []string
 	switch v := packagesInterface.(type) {
-	case []interface{}:
+	case []any:
 		for _, pkg := range v {
 			if pkgStr, ok := pkg.(string); ok {
 				packages = append(packages, pkgStr)
@@ -138,7 +139,8 @@ func (h *PackageInstallHandler) Execute(action executor.Action, context *executo
 }
 
 // isPackageInstalled checks if a package is installed
-func (h *PackageInstallHandler) isPackageInstalled(cmd executor.CommandRunner, pm, pkg string) (bool, error) {
+func (h *PackageInstallHandler) isPackageInstalled(cmd executor.CommandRunner,
+	pm, pkg string) (bool, error) {
 	switch pm {
 	case "apt":
 		output, _, err := cmd.CombinedOutput("dpkg-query", nil, "-W", "-f=${Status}", pkg)
@@ -195,7 +197,8 @@ func (h *PackageInstallHandler) updateCache(cmd executor.CommandRunner, pm strin
 }
 
 // installPackages installs the specified packages
-func (h *PackageInstallHandler) installPackages(cmd executor.CommandRunner, pm string, packages []string) error {
+func (h *PackageInstallHandler) installPackages(cmd executor.CommandRunner, pm string,
+	packages []string) error {
 	var name string
 	var args []string
 	opts := &executor.CommandOpts{
@@ -222,14 +225,4 @@ func (h *PackageInstallHandler) installPackages(cmd executor.CommandRunner, pm s
 	}
 
 	return nil
-}
-
-// getBoolParam gets a boolean parameter with a default value
-func getBoolParam(params map[string]interface{}, key string, defaultValue bool) bool {
-	if val, ok := params[key]; ok {
-		if boolVal, ok := val.(bool); ok {
-			return boolVal
-		}
-	}
-	return defaultValue
 }
