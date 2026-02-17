@@ -1,0 +1,11 @@
+.archived/
+.ssh/
+build/
+docs/
+.bash_history
+.DS_Store
+CLAUDE.md
+go.sum
+/*.tar.gz
+/*.sig
+/playbook-*
