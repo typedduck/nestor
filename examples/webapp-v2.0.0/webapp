@@ -1,0 +1,3 @@
+#!/bin/sh
+# Mock webapp binary for nestor example
+echo "webapp v2.0.0 starting on port ${PORT:-8080}"

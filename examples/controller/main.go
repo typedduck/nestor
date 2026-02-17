@@ -10,7 +10,7 @@ import (
 
 func main() {
 	// Example 1: Simple deployment using library API
-	// simpleDeployment()
+	simpleDeployment()
 
 	// Example 2: Full deployment with explicit executor configuration
 	fullDeploymentWithConfig()
@@ -41,7 +41,7 @@ func simpleDeployment() {
 		modules.Content("Welcome to a nestor-managed server\n"))
 
 	err := executor.Deploy(pb, "user@webserver-01.example.com", &executor.Config{
-		SSHKeyPath: "~/.ssh/id_nestor_ed25519",
+		SSHKeyPath: "./examples/user-ssh/id_nestor_ed25519",
 		DryRun:     true,
 	})
 	if err != nil {
@@ -73,13 +73,13 @@ func fullDeploymentWithConfig() {
 
 	// Upload application binary
 	modules.File(pb, "/opt/webapp/app",
-		modules.FromFile("./build/webapp-v2.0.0"),
+		modules.FromFile("./examples/webapp-v2.0.0/webapp"),
 		modules.Owner("webapp", "webapp"),
 		modules.Mode(0755))
 
 	// Deploy configuration from template
 	modules.File(pb, "/opt/webapp/config.toml",
-		modules.FromTemplate("config.toml.tmpl"),
+		modules.FromTemplate("./examples/webapp-v2.0.0/config.toml.tmpl"),
 		modules.TemplateVars(map[string]string{
 			"DBHost":    "db.example.com",
 			"DBPort":    "5432",
@@ -94,7 +94,7 @@ func fullDeploymentWithConfig() {
 
 	// Create systemd service
 	modules.File(pb, "/etc/systemd/system/webapp.service",
-		modules.FromTemplate("webapp.service.tmpl"),
+		modules.FromTemplate("./examples/webapp-v2.0.0/webapp.service.tmpl"),
 		modules.TemplateVars(map[string]string{
 			"WorkingDirectory": "/opt/webapp",
 			"ExecStart":        "/opt/webapp/app",
@@ -104,7 +104,7 @@ func fullDeploymentWithConfig() {
 
 	// Configure nginx
 	modules.File(pb, "/etc/nginx/sites-available/webapp",
-		modules.FromTemplate("nginx-webapp.conf.tmpl"),
+		modules.FromTemplate("./examples/webapp-v2.0.0/nginx-webapp.conf.tmpl"),
 		modules.TemplateVars(map[string]string{
 			"ServerName": "webapp.example.com",
 			"ProxyPass":  "http://127.0.0.1:8080",
@@ -116,12 +116,13 @@ func fullDeploymentWithConfig() {
 
 	// Deploy the playbook
 	err := executor.Deploy(pb, "deploy@webapp-01.example.com", &executor.Config{
-		WorkDir:        "/tmp/nestor-work",
-		SSHKeyPath:     "/home/user/.ssh/deploy_key",
-		SigningKeyPath: "/home/user/.ssh/nestor_signing_key",
-		KnownHostsPath: "/home/user/.ssh/known_hosts",
-		AgentPath:      "/usr/local/bin/nestor-agent",
-		DryRun:         true,
+		// WorkDir:        "/tmp/nestor-work",
+		// SSHKeyPath:     "/home/user/.ssh/deploy_key",
+		// SigningKeyPath: "/home/user/.ssh/nestor_signing_key",
+		// KnownHostsPath: "/home/user/.ssh/known_hosts",
+		// AgentPath:      "/usr/local/bin/nestor-agent",
+		SSHKeyPath: "./examples/user-ssh/id_nestor_ed25519",
+		DryRun:     true,
 	})
 	if err != nil {
 		log.Printf("[ERROR] %v", err)

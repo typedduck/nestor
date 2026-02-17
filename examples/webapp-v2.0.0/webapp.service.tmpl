@@ -1,0 +1,15 @@
+[Unit]
+Description=Webapp Service
+After=network.target postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User={{.User}}
+Group={{.Group}}
+WorkingDirectory={{.WorkingDirectory}}
+ExecStart={{.ExecStart}}
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
