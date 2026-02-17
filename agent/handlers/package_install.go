@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"fmt"
-	"os/exec"
 	"strings"
 
 	"github.com/typedduck/nestor/agent/executor"
@@ -80,10 +79,12 @@ func (h *PackageInstallHandler) Execute(action executor.Action, context *executo
 		}
 	}
 
+	cmd := context.Cmd
+
 	// Check which packages are already installed
 	toInstall := []string{}
 	for _, pkg := range packages {
-		installed, err := h.isPackageInstalled(pm, pkg)
+		installed, err := h.isPackageInstalled(cmd, pm, pkg)
 		if err != nil {
 			return executor.ActionResult{
 				Status:  "failed",
@@ -108,7 +109,7 @@ func (h *PackageInstallHandler) Execute(action executor.Action, context *executo
 
 	// Update package cache if requested
 	if updateCache {
-		if err := h.updateCache(pm); err != nil {
+		if err := h.updateCache(cmd, pm); err != nil {
 			return executor.ActionResult{
 				Status:  "failed",
 				Changed: false,
@@ -119,7 +120,7 @@ func (h *PackageInstallHandler) Execute(action executor.Action, context *executo
 	}
 
 	// Install missing packages
-	if err := h.installPackages(pm, toInstall); err != nil {
+	if err := h.installPackages(cmd, pm, toInstall); err != nil {
 		return executor.ActionResult{
 			Status:  "failed",
 			Changed: false,
@@ -137,13 +138,10 @@ func (h *PackageInstallHandler) Execute(action executor.Action, context *executo
 }
 
 // isPackageInstalled checks if a package is installed
-func (h *PackageInstallHandler) isPackageInstalled(pm, pkg string) (bool, error) {
-	var cmd *exec.Cmd
-
+func (h *PackageInstallHandler) isPackageInstalled(cmd executor.CommandRunner, pm, pkg string) (bool, error) {
 	switch pm {
 	case "apt":
-		cmd = exec.Command("dpkg-query", "-W", "-f=${Status}", pkg)
-		output, err := cmd.CombinedOutput()
+		output, _, err := cmd.CombinedOutput("dpkg-query", nil, "-W", "-f=${Status}", pkg)
 		if err != nil {
 			// Package not found
 			return false, nil
@@ -151,8 +149,7 @@ func (h *PackageInstallHandler) isPackageInstalled(pm, pkg string) (bool, error)
 		return strings.Contains(string(output), "install ok installed"), nil
 
 	case "yum", "dnf":
-		cmd = exec.Command(pm, "list", "installed", pkg)
-		err := cmd.Run()
+		err := cmd.Run(pm, nil, "list", "installed", pkg)
 		return err == nil, nil
 
 	default:
@@ -161,56 +158,65 @@ func (h *PackageInstallHandler) isPackageInstalled(pm, pkg string) (bool, error)
 }
 
 // updateCache updates the package manager cache
-func (h *PackageInstallHandler) updateCache(pm string) error {
-	var cmd *exec.Cmd
-
+func (h *PackageInstallHandler) updateCache(cmd executor.CommandRunner, pm string) error {
 	switch pm {
 	case "apt":
-		cmd = exec.Command("apt-get", "update", "-qq")
+		output, _, err := cmd.CombinedOutput("apt-get", nil, "update", "-qq")
+		if err != nil {
+			return fmt.Errorf("update cache failed: %s", string(output))
+		}
+		return nil
+
 	case "yum":
-		cmd = exec.Command("yum", "check-update", "-q")
+		output, exitCode, err := cmd.CombinedOutput("yum", nil, "check-update", "-q")
+		if err != nil {
+			// yum returns exit code 100 when updates are available
+			if exitCode == 100 {
+				return nil
+			}
+			return fmt.Errorf("update cache failed: %s", string(output))
+		}
+		return nil
+
 	case "dnf":
-		cmd = exec.Command("dnf", "check-update", "-q")
+		output, exitCode, err := cmd.CombinedOutput("dnf", nil, "check-update", "-q")
+		if err != nil {
+			// dnf returns exit code 100 when updates are available
+			if exitCode == 100 {
+				return nil
+			}
+			return fmt.Errorf("update cache failed: %s", string(output))
+		}
+		return nil
+
 	default:
 		return fmt.Errorf("unsupported package manager: %s", pm)
 	}
-
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		// yum/dnf return exit code 100 when updates are available
-		if pm == "yum" || pm == "dnf" {
-			if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 100 {
-				return nil
-			}
-		}
-		return fmt.Errorf("update cache failed: %s", string(output))
-	}
-
-	return nil
 }
 
 // installPackages installs the specified packages
-func (h *PackageInstallHandler) installPackages(pm string, packages []string) error {
-	var cmd *exec.Cmd
+func (h *PackageInstallHandler) installPackages(cmd executor.CommandRunner, pm string, packages []string) error {
+	var name string
+	var args []string
+	opts := &executor.CommandOpts{
+		Env: []string{"DEBIAN_FRONTEND=noninteractive"},
+	}
 
 	switch pm {
 	case "apt":
-		args := append([]string{"install", "-y", "-qq"}, packages...)
-		cmd = exec.Command("apt-get", args...)
+		name = "apt-get"
+		args = append([]string{"install", "-y", "-qq"}, packages...)
 	case "yum":
-		args := append([]string{"install", "-y", "-q"}, packages...)
-		cmd = exec.Command("yum", args...)
+		name = "yum"
+		args = append([]string{"install", "-y", "-q"}, packages...)
 	case "dnf":
-		args := append([]string{"install", "-y", "-q"}, packages...)
-		cmd = exec.Command("dnf", args...)
+		name = "dnf"
+		args = append([]string{"install", "-y", "-q"}, packages...)
 	default:
 		return fmt.Errorf("unsupported package manager: %s", pm)
 	}
 
-	// Set environment to non-interactive
-	cmd.Env = append(cmd.Env, "DEBIAN_FRONTEND=noninteractive")
-
-	output, err := cmd.CombinedOutput()
+	output, _, err := cmd.CombinedOutput(name, opts, args...)
 	if err != nil {
 		return fmt.Errorf("install failed: %s", string(output))
 	}

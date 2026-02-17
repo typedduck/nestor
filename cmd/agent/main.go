@@ -10,6 +10,7 @@ import (
 
 	"github.com/typedduck/nestor/agent/executor"
 	"github.com/typedduck/nestor/agent/handlers"
+	"github.com/typedduck/nestor/agent/platform"
 	"github.com/typedduck/nestor/agent/system"
 	"github.com/typedduck/nestor/agent/validator"
 )
@@ -54,8 +55,12 @@ func main() {
 	log.Printf("[INFO ] created by: %s at %s", playbook.Controller, playbook.Created)
 	log.Printf("[INFO ] actions to execute: %d", len(playbook.Actions))
 
+	// Create platform implementations
+	fs := platform.OSFileSystem{}
+	cmd := platform.OSCommandRunner{}
+
 	// Validate playbook integrity
-	val := validator.New(config.PlaybookPath)
+	val := validator.New(config.PlaybookPath, nil)
 	if err := val.ValidateSignature(); err != nil {
 		log.Fatalf("[FATAL] signature validation failed: %v", err)
 	}
@@ -66,12 +71,12 @@ func main() {
 	log.Println("[INFO ] playbook validation successful")
 
 	// Detect system capabilities
-	sysInfo := system.DetectSystem()
+	sysInfo := system.DetectSystem(nil, nil)
 	log.Printf("[INFO ] system detected: OS=%s, PackageManager=%s, InitSystem=%s",
 		sysInfo.OS, sysInfo.PackageManager, sysInfo.InitSystem)
 
 	// Create execution engine
-	engine := executor.New(playbook, sysInfo, config.StateFile)
+	engine := executor.New(playbook, sysInfo, config.StateFile, fs, cmd)
 	engine.SetDryRun(config.DryRun)
 
 	// Register action handlers

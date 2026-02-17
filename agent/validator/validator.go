@@ -10,14 +10,25 @@ import (
 	"strings"
 )
 
+// FileOpener abstracts file system operations for testability.
+type FileOpener interface {
+	Stat(path string) (os.FileInfo, error)
+	Open(path string) (*os.File, error)
+}
+
 // Validator validates playbook integrity
 type Validator struct {
 	playbookPath string
 	extractPath  string
+	fs           FileOpener
 }
 
-// New creates a new validator
-func New(playbookPath string) *Validator {
+// New creates a new validator. If fs is nil, real OS operations are used.
+func New(playbookPath string, fs FileOpener) *Validator {
+	if fs == nil {
+		fs = osFileOpener{}
+	}
+
 	// Assume playbook is extracted to a temporary directory
 	// In reality, this would be the actual extraction path
 	extractPath := "/tmp/nestor-playbook-" + filepath.Base(playbookPath)
@@ -25,6 +36,7 @@ func New(playbookPath string) *Validator {
 	return &Validator{
 		playbookPath: playbookPath,
 		extractPath:  extractPath,
+		fs:           fs,
 	}
 }
 
@@ -38,7 +50,7 @@ func (v *Validator) ValidateSignature() error {
 	// 4. Return error if validation fails
 
 	signaturePath := filepath.Join(v.extractPath, "signature")
-	if _, err := os.Stat(signaturePath); err != nil {
+	if _, err := v.fs.Stat(signaturePath); err != nil {
 		return fmt.Errorf("signature file not found: %w", err)
 	}
 
@@ -51,7 +63,7 @@ func (v *Validator) ValidateManifest() error {
 	manifestPath := filepath.Join(v.extractPath, "manifest")
 
 	// Read manifest file
-	f, err := os.Open(manifestPath)
+	f, err := v.fs.Open(manifestPath)
 	if err != nil {
 		return fmt.Errorf("failed to open manifest: %w", err)
 	}
@@ -102,7 +114,7 @@ func (v *Validator) ValidateManifest() error {
 func (v *Validator) computeChecksum(relPath string) (string, error) {
 	fullPath := filepath.Join(v.extractPath, relPath)
 
-	f, err := os.Open(fullPath)
+	f, err := v.fs.Open(fullPath)
 	if err != nil {
 		return "", err
 	}
@@ -115,3 +127,9 @@ func (v *Validator) computeChecksum(relPath string) (string, error) {
 
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
+
+// osFileOpener is the default FileOpener using the real OS.
+type osFileOpener struct{}
+
+func (osFileOpener) Stat(path string) (os.FileInfo, error)  { return os.Stat(path) }
+func (osFileOpener) Open(path string) (*os.File, error)     { return os.Open(path) }

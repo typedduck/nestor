@@ -22,9 +22,9 @@ type Playbook struct {
 
 // Action represents a single action to execute
 type Action struct {
-	ID     string                 `json:"id"`
-	Type   string                 `json:"type"`
-	Params map[string]interface{} `json:"params"`
+	ID     string         `json:"id"`
+	Type   string         `json:"type"`
+	Params map[string]any `json:"params"`
 }
 
 // ExecutionResult represents the result of executing a playbook
@@ -57,6 +57,31 @@ type ExecutionSummary struct {
 	Changed int `json:"changed"`
 }
 
+// FileSystem abstracts file system operations for testability
+type FileSystem interface {
+	ReadFile(path string) ([]byte, error)
+	WriteFile(path string, data []byte, perm os.FileMode) error
+	Stat(path string) (os.FileInfo, error)
+	Mkdir(path string, perm os.FileMode) error
+	MkdirAll(path string, perm os.FileMode) error
+	Chmod(path string, mode os.FileMode) error
+	Chown(path string, uid, gid int) error
+	Open(path string) (*os.File, error)
+}
+
+// CommandOpts provides optional configuration for command execution
+type CommandOpts struct {
+	Env []string // additional environment variables
+	Dir string   // working directory
+}
+
+// CommandRunner abstracts command execution for testability
+type CommandRunner interface {
+	Run(name string, opts *CommandOpts, args ...string) error
+	CombinedOutput(name string, opts *CommandOpts, args ...string) ([]byte, int, error)
+	LookPath(name string) (string, error)
+}
+
 // Handler defines the interface that all action handlers must implement
 type Handler interface {
 	// Execute runs the action and returns the result
@@ -69,6 +94,8 @@ type ExecutionContext struct {
 	Environment  map[string]string // Environment variables
 	SystemInfo   *system.Info      // System information
 	DryRun       bool              // Whether this is a dry run
+	FS           FileSystem        // File system abstraction
+	Cmd          CommandRunner     // Command execution abstraction
 }
 
 // Engine coordinates the execution of actions
@@ -78,16 +105,21 @@ type Engine struct {
 	handlers   map[string]Handler
 	stateFile  string
 	dryRun     bool
+	fs         FileSystem
+	cmd        CommandRunner
 }
 
 // New creates a new execution engine
-func New(playbook *Playbook, sysInfo *system.Info, stateFile string) *Engine {
+func New(playbook *Playbook, sysInfo *system.Info, stateFile string,
+	fs FileSystem, cmd CommandRunner) *Engine {
 	return &Engine{
 		playbook:   playbook,
 		systemInfo: sysInfo,
 		handlers:   make(map[string]Handler),
 		stateFile:  stateFile,
 		dryRun:     false,
+		fs:         fs,
+		cmd:        cmd,
 	}
 }
 
@@ -119,6 +151,8 @@ func (e *Engine) Execute() (*ExecutionResult, error) {
 		Environment:  e.playbook.Environment,
 		SystemInfo:   e.systemInfo,
 		DryRun:       e.dryRun,
+		FS:           e.fs,
+		Cmd:          e.cmd,
 	}
 
 	// Execute each action sequentially
@@ -217,12 +251,12 @@ func (e *Engine) saveState(result *ExecutionResult) error {
 		return err
 	}
 
-	return os.WriteFile(e.stateFile, data, 0644)
+	return e.fs.WriteFile(e.stateFile, data, 0644)
 }
 
 // LoadState loads the execution state from disk (for reattachment)
-func LoadState(stateFile string) (*ExecutionResult, error) {
-	data, err := os.ReadFile(stateFile)
+func LoadState(stateFile string, fs FileSystem) (*ExecutionResult, error) {
+	data, err := fs.ReadFile(stateFile)
 	if err != nil {
 		return nil, err
 	}

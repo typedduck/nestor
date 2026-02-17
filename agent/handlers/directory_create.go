@@ -60,8 +60,10 @@ func (h *DirectoryCreateHandler) Execute(action executor.Action,
 		}
 	}
 
+	fs := context.FS
+
 	// Check if directory already exists
-	stat, err := os.Stat(path)
+	stat, err := fs.Stat(path)
 	if err == nil {
 		// Directory exists
 		if !stat.IsDir() {
@@ -74,7 +76,7 @@ func (h *DirectoryCreateHandler) Execute(action executor.Action,
 		}
 
 		// Directory exists, update permissions if needed
-		if err := h.setPermissions(path, owner, group, modeStr); err != nil {
+		if err := h.setPermissions(fs, path, owner, group, modeStr); err != nil {
 			return executor.ActionResult{
 				Status:  "failed",
 				Changed: false,
@@ -92,9 +94,9 @@ func (h *DirectoryCreateHandler) Execute(action executor.Action,
 
 	// Create directory
 	if recursive {
-		err = os.MkdirAll(path, os.FileMode(mode))
+		err = fs.MkdirAll(path, os.FileMode(mode))
 	} else {
-		err = os.Mkdir(path, os.FileMode(mode))
+		err = fs.Mkdir(path, os.FileMode(mode))
 	}
 
 	if err != nil {
@@ -107,7 +109,7 @@ func (h *DirectoryCreateHandler) Execute(action executor.Action,
 	}
 
 	// Set ownership
-	if err := h.setPermissions(path, owner, group, modeStr); err != nil {
+	if err := h.setPermissions(fs, path, owner, group, modeStr); err != nil {
 		return executor.ActionResult{
 			Status:  "failed",
 			Changed: true, // Directory was created but permissions failed
@@ -124,21 +126,21 @@ func (h *DirectoryCreateHandler) Execute(action executor.Action,
 }
 
 // setPermissions sets the owner, group, and mode for a directory
-func (h *DirectoryCreateHandler) setPermissions(path, owner, group, modeStr string) error {
+func (h *DirectoryCreateHandler) setPermissions(fs executor.FileSystem, path, owner, group, modeStr string) error {
 	// Set mode
 	if modeStr != "" {
 		mode, err := strconv.ParseUint(modeStr, 8, 32)
 		if err != nil {
 			return fmt.Errorf("invalid mode: %s", modeStr)
 		}
-		if err := os.Chmod(path, os.FileMode(mode)); err != nil {
+		if err := fs.Chmod(path, os.FileMode(mode)); err != nil {
 			return fmt.Errorf("chmod failed: %w", err)
 		}
 	}
 
 	// Set owner and group
 	if owner != "" || group != "" {
-		if err := h.chown(path, owner, group); err != nil {
+		if err := h.chown(fs, path, owner, group); err != nil {
 			return fmt.Errorf("chown failed: %w", err)
 		}
 	}
@@ -147,9 +149,9 @@ func (h *DirectoryCreateHandler) setPermissions(path, owner, group, modeStr stri
 }
 
 // chown changes the owner and group of a directory
-func (h *DirectoryCreateHandler) chown(path, owner, group string) error {
+func (h *DirectoryCreateHandler) chown(fs executor.FileSystem, path, owner, group string) error {
 	// Get current directory info
-	_, err := os.Stat(path)
+	_, err := fs.Stat(path)
 	if err != nil {
 		return err
 	}
@@ -172,7 +174,7 @@ func (h *DirectoryCreateHandler) chown(path, owner, group string) error {
 	}
 
 	if uid != -1 || gid != -1 {
-		return os.Chown(path, uid, gid)
+		return fs.Chown(path, uid, gid)
 	}
 
 	return nil

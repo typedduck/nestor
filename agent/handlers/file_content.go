@@ -59,8 +59,10 @@ func (h *FileContentHandler) Execute(action executor.Action,
 		}
 	}
 
+	fs := context.FS
+
 	// Check if file exists and has same content
-	exists, sameContent, err := h.checkFile(destination, content)
+	exists, sameContent, err := h.checkFile(fs, destination, content)
 	if err != nil {
 		return executor.ActionResult{
 			Status:  "failed",
@@ -72,7 +74,7 @@ func (h *FileContentHandler) Execute(action executor.Action,
 
 	if exists && sameContent {
 		// File exists with correct content, just update permissions if needed
-		if err := h.setPermissions(destination, owner, group, mode); err != nil {
+		if err := h.setPermissions(fs, destination, owner, group, mode); err != nil {
 			return executor.ActionResult{
 				Status:  "failed",
 				Changed: false,
@@ -89,7 +91,7 @@ func (h *FileContentHandler) Execute(action executor.Action,
 	}
 
 	// Create parent directory if it doesn't exist
-	if err := os.MkdirAll(filepath.Dir(destination), 0755); err != nil {
+	if err := fs.MkdirAll(filepath.Dir(destination), 0755); err != nil {
 		return executor.ActionResult{
 			Status:  "failed",
 			Changed: false,
@@ -99,7 +101,7 @@ func (h *FileContentHandler) Execute(action executor.Action,
 	}
 
 	// Write the file
-	if err := os.WriteFile(destination, []byte(content), 0644); err != nil {
+	if err := fs.WriteFile(destination, []byte(content), 0644); err != nil {
 		return executor.ActionResult{
 			Status:  "failed",
 			Changed: false,
@@ -109,7 +111,7 @@ func (h *FileContentHandler) Execute(action executor.Action,
 	}
 
 	// Set permissions
-	if err := h.setPermissions(destination, owner, group, mode); err != nil {
+	if err := h.setPermissions(fs, destination, owner, group, mode); err != nil {
 		return executor.ActionResult{
 			Status:  "failed",
 			Changed: true, // File was created but permissions failed
@@ -131,8 +133,8 @@ func (h *FileContentHandler) Execute(action executor.Action,
 }
 
 // checkFile checks if a file exists and has the same content
-func (h *FileContentHandler) checkFile(path, content string) (exists bool, sameContent bool, err error) {
-	data, err := os.ReadFile(path)
+func (h *FileContentHandler) checkFile(fs executor.FileSystem, path, content string) (exists bool, sameContent bool, err error) {
+	data, err := fs.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return false, false, nil
@@ -145,21 +147,21 @@ func (h *FileContentHandler) checkFile(path, content string) (exists bool, sameC
 }
 
 // setPermissions sets the owner, group, and mode for a file
-func (h *FileContentHandler) setPermissions(path, owner, group, modeStr string) error {
+func (h *FileContentHandler) setPermissions(fs executor.FileSystem, path, owner, group, modeStr string) error {
 	// Set mode
 	if modeStr != "" {
 		mode, err := strconv.ParseUint(modeStr, 8, 32)
 		if err != nil {
 			return fmt.Errorf("invalid mode: %s", modeStr)
 		}
-		if err := os.Chmod(path, os.FileMode(mode)); err != nil {
+		if err := fs.Chmod(path, os.FileMode(mode)); err != nil {
 			return fmt.Errorf("chmod failed: %w", err)
 		}
 	}
 
 	// Set owner and group
 	if owner != "" || group != "" {
-		if err := h.chown(path, owner, group); err != nil {
+		if err := h.chown(fs, path, owner, group); err != nil {
 			return fmt.Errorf("chown failed: %w", err)
 		}
 	}
@@ -168,9 +170,9 @@ func (h *FileContentHandler) setPermissions(path, owner, group, modeStr string) 
 }
 
 // chown changes the owner and group of a file
-func (h *FileContentHandler) chown(path, owner, group string) error {
+func (h *FileContentHandler) chown(fs executor.FileSystem, path, owner, group string) error {
 	// Get current file info
-	stat, err := os.Stat(path)
+	stat, err := fs.Stat(path)
 	if err != nil {
 		return err
 	}
@@ -197,7 +199,7 @@ func (h *FileContentHandler) chown(path, owner, group string) error {
 		}
 	}
 
-	return os.Chown(path, uid, gid)
+	return fs.Chown(path, uid, gid)
 }
 
 // getStringParam gets a string parameter with a default value
@@ -211,8 +213,8 @@ func getStringParam(params map[string]interface{}, key, defaultValue string) str
 }
 
 // computeFileHash computes the SHA256 hash of a file
-func computeFileHash(path string) (string, error) {
-	f, err := os.Open(path)
+func computeFileHash(fs executor.FileSystem, path string) (string, error) {
+	f, err := fs.Open(path)
 	if err != nil {
 		return "", err
 	}

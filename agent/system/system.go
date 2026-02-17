@@ -2,10 +2,22 @@ package system
 
 import (
 	"os"
-	"os/exec"
 	"runtime"
 	"strings"
 )
+
+// FileReader abstracts file system reads for testability.
+// This is a subset of executor.FileSystem to avoid circular imports.
+type FileReader interface {
+	ReadFile(path string) ([]byte, error)
+	Stat(path string) (os.FileInfo, error)
+}
+
+// CommandLooker abstracts command lookup for testability.
+// This is a subset of executor.CommandRunner to avoid circular imports.
+type CommandLooker interface {
+	LookPath(name string) (string, error)
+}
 
 // Info contains information about the system
 type Info struct {
@@ -16,17 +28,25 @@ type Info struct {
 	Architecture   string
 }
 
-// DetectSystem detects the system capabilities
-func DetectSystem() *Info {
+// DetectSystem detects the system capabilities using the provided abstractions.
+// If fr or cl are nil, real OS/exec implementations are used.
+func DetectSystem(fr FileReader, cl CommandLooker) *Info {
+	if fr == nil {
+		fr = osFileReader{}
+	}
+	if cl == nil {
+		cl = osCommandLooker{}
+	}
+
 	info := &Info{
 		OS:           runtime.GOOS,
 		Architecture: runtime.GOARCH,
 	}
 
 	if info.OS == "linux" {
-		info.Distribution = detectDistribution()
-		info.PackageManager = detectPackageManager()
-		info.InitSystem = detectInitSystem()
+		info.Distribution = detectDistribution(fr)
+		info.PackageManager = detectPackageManager(cl)
+		info.InitSystem = detectInitSystem(fr, cl)
 	}
 
 	return info
@@ -38,9 +58,9 @@ func IsRoot() bool {
 }
 
 // detectDistribution detects the Linux distribution
-func detectDistribution() string {
+func detectDistribution(fr FileReader) string {
 	// Try reading /etc/os-release
-	data, err := os.ReadFile("/etc/os-release")
+	data, err := fr.ReadFile("/etc/os-release")
 	if err == nil {
 		lines := strings.Split(string(data), "\n")
 		for _, line := range lines {
@@ -51,10 +71,10 @@ func detectDistribution() string {
 	}
 
 	// Fallback checks
-	if fileExists("/etc/debian_version") {
+	if fileExistsVia(fr, "/etc/debian_version") {
 		return "debian"
 	}
-	if fileExists("/etc/redhat-release") {
+	if fileExistsVia(fr, "/etc/redhat-release") {
 		return "redhat"
 	}
 
@@ -62,7 +82,7 @@ func detectDistribution() string {
 }
 
 // detectPackageManager detects the available package manager
-func detectPackageManager() string {
+func detectPackageManager(cl CommandLooker) string {
 	managers := []struct {
 		command string
 		name    string
@@ -76,7 +96,7 @@ func detectPackageManager() string {
 	}
 
 	for _, mgr := range managers {
-		if commandExists(mgr.command) {
+		if commandExistsVia(cl, mgr.command) {
 			return mgr.name
 		}
 	}
@@ -85,34 +105,34 @@ func detectPackageManager() string {
 }
 
 // detectInitSystem detects the init system
-func detectInitSystem() string {
+func detectInitSystem(fr FileReader, cl CommandLooker) string {
 	// Check for systemd
-	if commandExists("systemctl") {
+	if commandExistsVia(cl, "systemctl") {
 		return "systemd"
 	}
 
 	// Check for SysV init
-	if fileExists("/etc/init.d") {
+	if fileExistsVia(fr, "/etc/init.d") {
 		return "sysvinit"
 	}
 
 	// Check for OpenRC
-	if commandExists("rc-service") {
+	if commandExistsVia(cl, "rc-service") {
 		return "openrc"
 	}
 
 	return "unknown"
 }
 
-// commandExists checks if a command is available in PATH
-func commandExists(command string) bool {
-	_, err := exec.LookPath(command)
+// commandExistsVia checks if a command is available in PATH
+func commandExistsVia(cl CommandLooker, command string) bool {
+	_, err := cl.LookPath(command)
 	return err == nil
 }
 
-// fileExists checks if a file exists
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
+// fileExistsVia checks if a file exists using the FileReader
+func fileExistsVia(fr FileReader, path string) bool {
+	_, err := fr.Stat(path)
 	return err == nil
 }
 
@@ -126,8 +146,8 @@ type FileInfo struct {
 }
 
 // GetFileInfo gets information about a file
-func GetFileInfo(path string) (*FileInfo, error) {
-	stat, err := os.Stat(path)
+func GetFileInfo(fr FileReader, path string) (*FileInfo, error) {
+	stat, err := fr.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return &FileInfo{Exists: false}, nil
