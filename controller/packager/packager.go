@@ -65,19 +65,19 @@ func (p *Packager) Package(pb *playbook.Playbook) (*Package, error) {
 		return nil, fmt.Errorf("failed to create upload directory: %w", err)
 	}
 
-	// Write playbook.json
-	if err := p.writePlaybookJSON(pb, pkg.PlaybookPath); err != nil {
-		return nil, fmt.Errorf("failed to write playbook.json: %w", err)
-	}
-
-	// Collect files to include in the archive
-	files := []string{"playbook.json"}
-
-	// Copy files referenced by actions to upload directory
+	// Collect files to include in the archive; this rewrites source params to
+	// upload/<basename> so the agent can locate them in the extracted archive.
 	uploadedFiles, err := p.collectUploadFiles(pb, pkg.UploadDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to collect upload files: %w", err)
 	}
+
+	// Write playbook.json after source paths have been rewritten.
+	if err := p.writePlaybookJSON(pb, pkg.PlaybookPath); err != nil {
+		return nil, fmt.Errorf("failed to write playbook.json: %w", err)
+	}
+
+	files := []string{"playbook.json"}
 	files = append(files, uploadedFiles...)
 
 	// Generate manifest with checksums
