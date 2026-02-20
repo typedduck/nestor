@@ -1,13 +1,22 @@
-package platform
+package executor
 
 import (
 	"os"
 	"os/exec"
-
-	"github.com/typedduck/nestor/agent/executor"
 )
 
-// OSFileSystem implements executor.FileSystem using the real OS.
+// OSFileReader is the default FileReader using the real OS.
+type OSFileReader struct{}
+
+func (OSFileReader) ReadFile(path string) ([]byte, error)  { return os.ReadFile(path) }
+func (OSFileReader) Stat(path string) (os.FileInfo, error) { return os.Stat(path) }
+
+// OSCommandLooker is the default CommandLooker using os/exec.
+type OSCommandLooker struct{}
+
+func (OSCommandLooker) LookPath(name string) (string, error) { return exec.LookPath(name) }
+
+// OSFileSystem implements FileSystem using the real OS.
 type OSFileSystem struct{}
 
 func (OSFileSystem) ReadFile(path string) ([]byte, error) { return os.ReadFile(path) }
@@ -18,19 +27,22 @@ func (OSFileSystem) Stat(path string) (os.FileInfo, error)        { return os.St
 func (OSFileSystem) Mkdir(path string, perm os.FileMode) error    { return os.Mkdir(path, perm) }
 func (OSFileSystem) MkdirAll(path string, perm os.FileMode) error { return os.MkdirAll(path, perm) }
 func (OSFileSystem) Chmod(path string, mode os.FileMode) error    { return os.Chmod(path, mode) }
-func (OSFileSystem) Chown(path string, uid, gid int) error        { return os.Chown(path, uid, gid) }
-func (OSFileSystem) Open(path string) (*os.File, error)           { return os.Open(path) }
+func (OSFileSystem) Chown(path string, uid, gid int) error {
+	return os.Chown(path, uid, gid)
+}
+func (OSFileSystem) Open(path string) (*os.File, error) { return os.Open(path) }
 
-// OSCommandRunner implements executor.CommandRunner using os/exec.
+// OSCommandRunner implements CommandRunner using os/exec.
 type OSCommandRunner struct{}
 
-func (OSCommandRunner) Run(name string, opts *executor.CommandOpts, args ...string) error {
+func (OSCommandRunner) Run(name string, opts *CommandOpts, args ...string) error {
 	cmd := exec.Command(name, args...)
 	applyOpts(cmd, opts)
 	return cmd.Run()
 }
 
-func (OSCommandRunner) CombinedOutput(name string, opts *executor.CommandOpts, args ...string) ([]byte, int, error) {
+func (OSCommandRunner) CombinedOutput(name string, opts *CommandOpts,
+	args ...string) ([]byte, int, error) {
 	cmd := exec.Command(name, args...)
 	applyOpts(cmd, opts)
 	output, err := cmd.CombinedOutput()
@@ -49,7 +61,7 @@ func (OSCommandRunner) LookPath(name string) (string, error) {
 	return exec.LookPath(name)
 }
 
-func applyOpts(cmd *exec.Cmd, opts *executor.CommandOpts) {
+func applyOpts(cmd *exec.Cmd, opts *CommandOpts) {
 	if opts == nil {
 		return
 	}

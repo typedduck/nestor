@@ -1,0 +1,339 @@
+package executor
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+)
+
+// MockFileSystem implements FileSystem (and, by structural subtyping, FileReader) using an
+// in-memory file tree. All paths are cleaned before use. Safe for concurrent access.
+type MockFileSystem struct {
+	mu    sync.RWMutex
+	files map[string]*mockFile
+}
+
+type mockFile struct {
+	data  []byte
+	mode  os.FileMode
+	uid   int
+	gid   int
+	isDir bool
+}
+
+// NewMockFileSystem creates an empty in-memory file system.
+func NewMockFileSystem() *MockFileSystem {
+	return &MockFileSystem{files: make(map[string]*mockFile)}
+}
+
+// AddFile pre-populates a file with content, mode, and ownership.
+func (m *MockFileSystem) AddFile(path string, data []byte, mode os.FileMode) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.files[filepath.Clean(path)] = &mockFile{data: data, mode: mode}
+}
+
+// AddDir pre-populates a directory entry.
+func (m *MockFileSystem) AddDir(path string, mode os.FileMode) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.files[filepath.Clean(path)] = &mockFile{isDir: true, mode: mode | os.ModeDir}
+}
+
+func (m *MockFileSystem) ReadFile(path string) ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	f, ok := m.files[filepath.Clean(path)]
+	if !ok {
+		return nil, &os.PathError{Op: "open", Path: path, Err: os.ErrNotExist}
+	}
+	if f.isDir {
+		return nil, &os.PathError{Op: "read", Path: path, Err: fmt.Errorf("is a directory")}
+	}
+	cp := make([]byte, len(f.data))
+	copy(cp, f.data)
+	return cp, nil
+}
+
+func (m *MockFileSystem) WriteFile(path string, data []byte, perm os.FileMode) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	clean := filepath.Clean(path)
+
+	// Parent directory must exist
+	dir := filepath.Dir(clean)
+	if dir != "." && dir != "/" {
+		if p, ok := m.files[dir]; !ok || !p.isDir {
+			return &os.PathError{Op: "open", Path: path, Err: os.ErrNotExist}
+		}
+	}
+
+	cp := make([]byte, len(data))
+	copy(cp, data)
+	if f, ok := m.files[clean]; ok {
+		f.data = cp
+		f.mode = perm
+	} else {
+		m.files[clean] = &mockFile{data: cp, mode: perm}
+	}
+	return nil
+}
+
+func (m *MockFileSystem) Stat(path string) (os.FileInfo, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	f, ok := m.files[filepath.Clean(path)]
+	if !ok {
+		return nil, &os.PathError{Op: "stat", Path: path, Err: os.ErrNotExist}
+	}
+	return &MockFileInfo{name: filepath.Base(path), file: f}, nil
+}
+
+func (m *MockFileSystem) Mkdir(path string, perm os.FileMode) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	clean := filepath.Clean(path)
+
+	if _, ok := m.files[clean]; ok {
+		return &os.PathError{Op: "mkdir", Path: path, Err: os.ErrExist}
+	}
+
+	// Parent must exist
+	dir := filepath.Dir(clean)
+	if dir != "." && dir != "/" {
+		if p, ok := m.files[dir]; !ok || !p.isDir {
+			return &os.PathError{Op: "mkdir", Path: path, Err: os.ErrNotExist}
+		}
+	}
+
+	m.files[clean] = &mockFile{isDir: true, mode: perm | os.ModeDir}
+	return nil
+}
+
+func (m *MockFileSystem) MkdirAll(path string, perm os.FileMode) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	clean := filepath.Clean(path)
+
+	// Walk each component and create missing directories
+	parts := strings.Split(clean, string(filepath.Separator))
+	current := ""
+	if filepath.IsAbs(clean) {
+		current = "/"
+	}
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		if current == "" || current == "/" {
+			current = current + part
+		} else {
+			current = current + string(filepath.Separator) + part
+		}
+		if existing, ok := m.files[current]; ok {
+			if !existing.isDir {
+				return &os.PathError{Op: "mkdir", Path: current, Err: fmt.Errorf("not a directory")}
+			}
+			continue
+		}
+		m.files[current] = &mockFile{isDir: true, mode: perm | os.ModeDir}
+	}
+	return nil
+}
+
+func (m *MockFileSystem) Chmod(path string, mode os.FileMode) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	f, ok := m.files[filepath.Clean(path)]
+	if !ok {
+		return &os.PathError{Op: "chmod", Path: path, Err: os.ErrNotExist}
+	}
+	if f.isDir {
+		f.mode = mode | os.ModeDir
+	} else {
+		f.mode = mode
+	}
+	return nil
+}
+
+func (m *MockFileSystem) Chown(path string, uid, gid int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	f, ok := m.files[filepath.Clean(path)]
+	if !ok {
+		return &os.PathError{Op: "chown", Path: path, Err: os.ErrNotExist}
+	}
+	f.uid = uid
+	f.gid = gid
+	return nil
+}
+
+// Open is not fully supported by the mockup (it returns *os.File which requires a real file
+// descriptor). It returns an error directing callers to use ReadFile instead. If tests need Open,
+// use the real OS with a temp directory.
+func (m *MockFileSystem) Open(path string) (*os.File, error) {
+	return nil, &os.PathError{Op: "open", Path: path,
+		Err: fmt.Errorf("mock.MockFileSystem.Open not supported; use ReadFile or a real temp dir")}
+}
+
+// FileContent returns the raw bytes stored for a file, for test assertions.
+func (m *MockFileSystem) FileContent(path string) ([]byte, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	f, ok := m.files[filepath.Clean(path)]
+	if !ok || f.isDir {
+		return nil, false
+	}
+	return f.data, true
+}
+
+// FileMode returns the mode stored for a path, for test assertions.
+func (m *MockFileSystem) FileMode(path string) (os.FileMode, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	f, ok := m.files[filepath.Clean(path)]
+	if !ok {
+		return 0, false
+	}
+	return f.mode, true
+}
+
+// FileOwner returns the uid and gid stored for a path, for test assertions.
+func (m *MockFileSystem) FileOwner(path string) (uid, gid int, ok bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	f, exists := m.files[filepath.Clean(path)]
+	if !exists {
+		return 0, 0, false
+	}
+	return f.uid, f.gid, true
+}
+
+// Exists returns whether a path exists in the mock filesystem.
+func (m *MockFileSystem) Exists(path string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	_, ok := m.files[filepath.Clean(path)]
+	return ok
+}
+
+// --- mockFileInfo implements os.FileInfo ---
+
+type MockFileInfo struct {
+	name string
+	file *mockFile
+}
+
+func (fi *MockFileInfo) Name() string       { return fi.name }
+func (fi *MockFileInfo) Size() int64        { return int64(len(fi.file.data)) }
+func (fi *MockFileInfo) Mode() os.FileMode  { return fi.file.mode }
+func (fi *MockFileInfo) ModTime() time.Time { return time.Time{} }
+func (fi *MockFileInfo) IsDir() bool        { return fi.file.isDir }
+func (fi *MockFileInfo) Sys() any           { return nil }
+
+// --- CommandRunner ---
+
+// MockCommandCall records a single command invocation.
+type MockCommandCall struct {
+	Name string
+	Args []string
+	Opts *CommandOpts
+}
+
+// MockCommandResponse defines what a mock command invocation should return.
+type MockCommandResponse struct {
+	Output   []byte
+	ExitCode int
+	Err      error
+}
+
+// MockCommandRunner implements MockCommandRunner (and, by structural subtyping, CommandLooker)
+// with canned responses. Commands are matched by name; use SetResponse / SetLookPath to configure.
+type MockCommandRunner struct {
+	mu        sync.Mutex
+	calls     []MockCommandCall
+	responses map[string]MockCommandResponse
+	lookPaths map[string]string // name -> path, missing = error
+}
+
+// NewMockCommandRunner creates a CommandRunner with no configured responses. By default all
+// commands return a "command not found" error.
+func NewMockCommandRunner() *MockCommandRunner {
+	return &MockCommandRunner{
+		responses: make(map[string]MockCommandResponse),
+		lookPaths: make(map[string]string),
+	}
+}
+
+// SetResponse configures the response for a command name.
+func (m *MockCommandRunner) SetResponse(name string, resp MockCommandResponse) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.responses[name] = resp
+}
+
+// SetLookPath makes LookPath succeed for the given command name.
+func (m *MockCommandRunner) SetLookPath(name, path string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.lookPaths[name] = path
+}
+
+// Calls returns a copy of all recorded command invocations.
+func (m *MockCommandRunner) Calls() []MockCommandCall {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	cp := make([]MockCommandCall, len(m.calls))
+	copy(cp, m.calls)
+	return cp
+}
+
+func (m *MockCommandRunner) record(name string, opts *CommandOpts, args []string) {
+	m.calls = append(m.calls, MockCommandCall{Name: name, Args: args, Opts: opts})
+}
+
+func (m *MockCommandRunner) Run(name string, opts *CommandOpts, args ...string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.record(name, opts, args)
+	resp, ok := m.responses[name]
+	if !ok {
+		return fmt.Errorf("command not found: %s", name)
+	}
+	if resp.Err != nil {
+		return resp.Err
+	}
+	if resp.ExitCode != 0 {
+		return fmt.Errorf("exit status %d", resp.ExitCode)
+	}
+	return nil
+}
+
+func (m *MockCommandRunner) CombinedOutput(name string, opts *CommandOpts, args ...string) ([]byte, int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.record(name, opts, args)
+	resp, ok := m.responses[name]
+	if !ok {
+		return nil, -1, fmt.Errorf("command not found: %s", name)
+	}
+	if resp.Err != nil {
+		return resp.Output, resp.ExitCode, resp.Err
+	}
+	if resp.ExitCode != 0 {
+		return resp.Output, resp.ExitCode, fmt.Errorf("exit status %d", resp.ExitCode)
+	}
+	return resp.Output, 0, nil
+}
+
+func (m *MockCommandRunner) LookPath(name string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if p, ok := m.lookPaths[name]; ok {
+		return p, nil
+	}
+	return "", fmt.Errorf("executable file not found in $PATH: %s", name)
+}

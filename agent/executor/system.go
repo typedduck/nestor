@@ -1,4 +1,4 @@
-package system
+package executor
 
 import (
 	"os"
@@ -13,10 +13,37 @@ type FileReader interface {
 	Stat(path string) (os.FileInfo, error)
 }
 
+// FileSystem abstracts file system operations for testability
+type FileSystem interface {
+	FileReader
+	WriteFile(path string, data []byte, perm os.FileMode) error
+	Mkdir(path string, perm os.FileMode) error
+	MkdirAll(path string, perm os.FileMode) error
+	Chmod(path string, mode os.FileMode) error
+	Chown(path string, uid, gid int) error
+	Open(path string) (*os.File, error)
+}
+
 // CommandLooker abstracts command lookup for testability.
 // This is a subset of executor.CommandRunner to avoid circular imports.
 type CommandLooker interface {
 	LookPath(name string) (string, error)
+}
+
+// CommandRunner abstracts command execution for testability
+type CommandRunner interface {
+	CommandLooker
+	Run(name string, opts *CommandOpts, args ...string) error
+	CombinedOutput(name string, opts *CommandOpts, args ...string) ([]byte, int, error)
+}
+
+// FileInfo provides information about a file
+type FileInfo struct {
+	Exists bool
+	Mode   os.FileMode
+	Owner  int
+	Group  int
+	Size   int64
 }
 
 // Info contains information about the system
@@ -28,14 +55,20 @@ type Info struct {
 	Architecture   string
 }
 
+// CommandOpts provides optional configuration for command execution
+type CommandOpts struct {
+	Env []string // additional environment variables
+	Dir string   // working directory
+}
+
 // DetectSystem detects the system capabilities using the provided abstractions.
 // If fr or cl are nil, real OS/exec implementations are used.
 func DetectSystem(fr FileReader, cl CommandLooker) *Info {
 	if fr == nil {
-		fr = osFileReader{}
+		fr = OSFileReader{}
 	}
 	if cl == nil {
-		cl = osCommandLooker{}
+		cl = OSCommandLooker{}
 	}
 
 	info := &Info{
@@ -44,9 +77,9 @@ func DetectSystem(fr FileReader, cl CommandLooker) *Info {
 	}
 
 	if info.OS == "linux" {
-		info.Distribution = detectDistribution(fr)
-		info.PackageManager = detectPackageManager(cl)
-		info.InitSystem = detectInitSystem(fr, cl)
+		info.Distribution = DetectDistribution(fr)
+		info.PackageManager = DetectPackageManager(cl)
+		info.InitSystem = DetectInitSystem(fr, cl)
 	}
 
 	return info
@@ -57,15 +90,15 @@ func IsRoot() bool {
 	return os.Geteuid() == 0
 }
 
-// detectDistribution detects the Linux distribution
-func detectDistribution(fr FileReader) string {
+// DetectDistribution detects the Linux distribution
+func DetectDistribution(fr FileReader) string {
 	// Try reading /etc/os-release
 	data, err := fr.ReadFile("/etc/os-release")
 	if err == nil {
-		lines := strings.Split(string(data), "\n")
-		for _, line := range lines {
-			if strings.HasPrefix(line, "ID=") {
-				return strings.Trim(strings.TrimPrefix(line, "ID="), "\"")
+		lines := strings.SplitSeq(string(data), "\n")
+		for line := range lines {
+			if after, ok := strings.CutPrefix(line, "ID="); ok {
+				return strings.Trim(after, "\"")
 			}
 		}
 	}
@@ -81,8 +114,8 @@ func detectDistribution(fr FileReader) string {
 	return "unknown"
 }
 
-// detectPackageManager detects the available package manager
-func detectPackageManager(cl CommandLooker) string {
+// DetectPackageManager detects the available package manager
+func DetectPackageManager(cl CommandLooker) string {
 	managers := []struct {
 		command string
 		name    string
@@ -104,8 +137,8 @@ func detectPackageManager(cl CommandLooker) string {
 	return "unknown"
 }
 
-// detectInitSystem detects the init system
-func detectInitSystem(fr FileReader, cl CommandLooker) string {
+// DetectInitSystem detects the init system
+func DetectInitSystem(fr FileReader, cl CommandLooker) string {
 	// Check for systemd
 	if commandExistsVia(cl, "systemctl") {
 		return "systemd"
@@ -134,15 +167,6 @@ func commandExistsVia(cl CommandLooker, command string) bool {
 func fileExistsVia(fr FileReader, path string) bool {
 	_, err := fr.Stat(path)
 	return err == nil
-}
-
-// FileInfo provides information about a file
-type FileInfo struct {
-	Exists bool
-	Mode   os.FileMode
-	Owner  int
-	Group  int
-	Size   int64
 }
 
 // GetFileInfo gets information about a file

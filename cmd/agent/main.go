@@ -10,8 +10,6 @@ import (
 
 	"github.com/typedduck/nestor/agent/executor"
 	"github.com/typedduck/nestor/agent/handlers"
-	"github.com/typedduck/nestor/agent/platform"
-	"github.com/typedduck/nestor/agent/system"
 	"github.com/typedduck/nestor/agent/validator"
 )
 
@@ -41,7 +39,7 @@ func main() {
 	log.Printf("[INFO ] %s version %s starting...", AgentName, Version)
 
 	// Check if running as root
-	if !system.IsRoot() {
+	if !executor.IsRoot() {
 		log.Fatal("[FATAL] agent must be run as root (use sudo)")
 	}
 
@@ -56,8 +54,8 @@ func main() {
 	log.Printf("[INFO ] actions to execute: %d", len(playbook.Actions))
 
 	// Create platform implementations
-	fs := platform.OSFileSystem{}
-	cmd := platform.OSCommandRunner{}
+	fs := executor.OSFileSystem{}
+	cmd := executor.OSCommandRunner{}
 
 	// Validate playbook integrity
 	val := validator.New(config.PlaybookPath, nil)
@@ -70,9 +68,9 @@ func main() {
 
 	log.Println("[INFO ] playbook validation successful")
 
-	// Detect system capabilities
-	sysInfo := system.DetectSystem(nil, nil)
-	log.Printf("[INFO ] system detected: OS=%s, PackageManager=%s, InitSystem=%s",
+	// Detect executor capabilities
+	sysInfo := executor.DetectSystem(nil, nil)
+	log.Printf("[INFO ] executor detected: OS=%s, PackageManager=%s, InitSystem=%s",
 		sysInfo.OS, sysInfo.PackageManager, sysInfo.InitSystem)
 
 	// Create execution engine
@@ -118,7 +116,7 @@ func parseFlags() *AgentConfig {
 	return config
 }
 
-// setupLogging configures the logging system
+// setupLogging configures the logging executor
 func setupLogging(logFile string) error {
 	if logFile != "" {
 		f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)

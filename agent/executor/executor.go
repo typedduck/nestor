@@ -3,10 +3,7 @@ package executor
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"time"
-
-	"github.com/typedduck/nestor/agent/system"
 )
 
 // Playbook represents the playbook structure loaded from playbook.json
@@ -57,31 +54,6 @@ type ExecutionSummary struct {
 	Changed int `json:"changed"`
 }
 
-// FileSystem abstracts file system operations for testability
-type FileSystem interface {
-	ReadFile(path string) ([]byte, error)
-	WriteFile(path string, data []byte, perm os.FileMode) error
-	Stat(path string) (os.FileInfo, error)
-	Mkdir(path string, perm os.FileMode) error
-	MkdirAll(path string, perm os.FileMode) error
-	Chmod(path string, mode os.FileMode) error
-	Chown(path string, uid, gid int) error
-	Open(path string) (*os.File, error)
-}
-
-// CommandOpts provides optional configuration for command execution
-type CommandOpts struct {
-	Env []string // additional environment variables
-	Dir string   // working directory
-}
-
-// CommandRunner abstracts command execution for testability
-type CommandRunner interface {
-	Run(name string, opts *CommandOpts, args ...string) error
-	CombinedOutput(name string, opts *CommandOpts, args ...string) ([]byte, int, error)
-	LookPath(name string) (string, error)
-}
-
 // Handler defines the interface that all action handlers must implement
 type Handler interface {
 	// Execute runs the action and returns the result
@@ -92,7 +64,7 @@ type Handler interface {
 type ExecutionContext struct {
 	PlaybookPath string            // Path to extracted playbook
 	Environment  map[string]string // Environment variables
-	SystemInfo   *system.Info      // System information
+	SystemInfo   *Info             // System information
 	DryRun       bool              // Whether this is a dry run
 	FS           FileSystem        // File system abstraction
 	Cmd          CommandRunner     // Command execution abstraction
@@ -101,7 +73,7 @@ type ExecutionContext struct {
 // Engine coordinates the execution of actions
 type Engine struct {
 	playbook   *Playbook
-	systemInfo *system.Info
+	systemInfo *Info
 	handlers   map[string]Handler
 	stateFile  string
 	dryRun     bool
@@ -110,7 +82,7 @@ type Engine struct {
 }
 
 // New creates a new execution engine
-func New(playbook *Playbook, sysInfo *system.Info, stateFile string,
+func New(playbook *Playbook, sysInfo *Info, stateFile string,
 	fs FileSystem, cmd CommandRunner) *Engine {
 	return &Engine{
 		playbook:   playbook,
