@@ -16,7 +16,7 @@ BUILD_TIME=$(shell date -u -Iseconds)
 # Linker flags
 LDFLAGS=-ldflags "-X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.BuildTime=$(BUILD_TIME)"
 
-.PHONY: all clean test build build-controller build-agent install help
+.PHONY: all clean test test-integration build build-controller build-agent install help
 
 all: build
 
@@ -26,6 +26,7 @@ help:
 	@echo "  build-controller  - Build controller binary"
 	@echo "  build-agent       - Build agent binary"
 	@echo "  test              - Run unit tests"
+	@echo "  test-integration  - Run integration tests (requires Docker or Podman)"
 	@echo "  test-verbose      - Run tests with verbose output"
 	@echo "  coverage          - Generate test coverage report"
 	@echo "  clean             - Remove build artifacts"
@@ -62,6 +63,12 @@ build-agent:
 test:
 	@echo "Running tests..."
 	$(GO) test ./... -v
+
+# Run integration tests (requires Docker or Podman)
+test-integration:
+	@echo "Running integration tests..."
+	@eval `cat .env`
+	$(GO) test -tags integration -v -timeout 10m ./tests/integration/...
 
 # Run tests with verbose output
 test-verbose:
