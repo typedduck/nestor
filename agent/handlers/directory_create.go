@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/typedduck/nestor/agent/executor"
+	"github.com/typedduck/nestor/playbook"
 )
 
 // DirectoryCreateHandler handles directory creation
@@ -17,7 +18,7 @@ func NewDirectoryCreateHandler() *DirectoryCreateHandler {
 }
 
 // Execute creates a directory with the specified permissions
-func (h *DirectoryCreateHandler) Execute(action executor.Action,
+func (h *DirectoryCreateHandler) Execute(action playbook.Action,
 	context *executor.ExecutionContext) executor.ActionResult {
 	// Extract parameters
 	path, ok := action.Params["path"].(string)

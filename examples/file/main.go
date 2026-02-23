@@ -5,33 +5,33 @@ import (
 	"log"
 
 	"github.com/typedduck/nestor/modules"
-	"github.com/typedduck/nestor/playbook"
+	"github.com/typedduck/nestor/playbook/builder"
 )
 
 func main() {
 	// Create a new playbook for deploying a web application
-	pb := playbook.New("webapp-file-deployment")
+	b := builder.New("webapp-file-deployment")
 
 	// Set environment variables
-	pb.SetEnv("ENVIRONMENT", "production")
-	pb.SetEnv("APP_VERSION", "v2.1.0")
+	b.SetEnv("ENVIRONMENT", "production")
+	b.SetEnv("APP_VERSION", "v2.1.0")
 
 	// 1. Create application directory structure
 	fmt.Println("Setting up directory structure...")
-	if err := modules.Directory(pb, "/opt/webapp",
+	if err := modules.Directory(b, "/opt/webapp",
 		modules.Owner("webapp", "webapp"),
 		modules.Mode(0755)); err != nil {
 		log.Fatalf("Failed to create webapp directory: %v", err)
 	}
 
-	if err := modules.Directory(pb, "/opt/webapp/config",
+	if err := modules.Directory(b, "/opt/webapp/config",
 		modules.Owner("webapp", "webapp"),
 		modules.Mode(0750),
 		modules.Recursive(true)); err != nil {
 		log.Fatalf("Failed to create config directory: %v", err)
 	}
 
-	if err := modules.Directory(pb, "/opt/webapp/logs",
+	if err := modules.Directory(b, "/opt/webapp/logs",
 		modules.Owner("webapp", "webapp"),
 		modules.Mode(0755),
 		modules.Recursive(true)); err != nil {
@@ -40,7 +40,7 @@ func main() {
 
 	// 2. Upload application binary
 	fmt.Println("Uploading application binary...")
-	if err := modules.File(pb, "/opt/webapp/webapp",
+	if err := modules.File(b, "/opt/webapp/webapp",
 		modules.FromFile("./build/webapp-v2.1.0"),
 		modules.Owner("webapp", "webapp"),
 		modules.Mode(0755)); err != nil {
@@ -49,7 +49,7 @@ func main() {
 
 	// 3. Create configuration from template
 	fmt.Println("Creating configuration files...")
-	if err := modules.File(pb, "/opt/webapp/config/app.toml",
+	if err := modules.File(b, "/opt/webapp/config/app.toml",
 		modules.FromTemplate("app.toml.tmpl"),
 		modules.TemplateVars(map[string]string{
 			"Environment": "production",
@@ -66,7 +66,7 @@ func main() {
 
 	// 4. Create systemd service file
 	fmt.Println("Creating systemd service...")
-	if err := modules.File(pb, "/etc/systemd/system/webapp.service",
+	if err := modules.File(b, "/etc/systemd/system/webapp.service",
 		modules.FromTemplate("webapp.service.tmpl"),
 		modules.TemplateVars(map[string]string{
 			"WorkingDirectory": "/opt/webapp",
@@ -80,7 +80,7 @@ func main() {
 
 	// 5. Create nginx configuration
 	fmt.Println("Configuring nginx...")
-	if err := modules.File(pb, "/etc/nginx/sites-available/webapp",
+	if err := modules.File(b, "/etc/nginx/sites-available/webapp",
 		modules.FromTemplate("nginx-webapp.conf.tmpl"),
 		modules.TemplateVars(map[string]string{
 			"ServerName": "webapp.example.com",
@@ -93,7 +93,7 @@ func main() {
 	}
 
 	// 6. Enable nginx site with symlink
-	if err := modules.Symlink(pb,
+	if err := modules.Symlink(b,
 		"/etc/nginx/sites-enabled/webapp",
 		"/etc/nginx/sites-available/webapp"); err != nil {
 		log.Fatalf("Failed to create nginx symlink: %v", err)
@@ -101,7 +101,7 @@ func main() {
 
 	// 7. Create a simple static HTML file
 	fmt.Println("Creating static content...")
-	if err := modules.File(pb, "/opt/webapp/public/index.html",
+	if err := modules.File(b, "/opt/webapp/public/index.html",
 		modules.Content(`<!DOCTYPE html>
 <html>
 <head>
@@ -119,7 +119,7 @@ func main() {
 	}
 
 	// 8. Create environment file with secrets
-	if err := modules.File(pb, "/opt/webapp/.env",
+	if err := modules.File(b, "/opt/webapp/.env",
 		modules.Content("DB_PASSWORD=super_secret_password\nAPI_KEY=abc123def456"),
 		modules.Owner("webapp", "webapp"),
 		modules.Mode(0600)); err != nil {
@@ -128,14 +128,14 @@ func main() {
 
 	// 9. Remove old version if it exists
 	fmt.Println("Cleaning up old versions...")
-	if err := modules.Remove(pb, "/opt/webapp-old",
+	if err := modules.Remove(b, "/opt/webapp-old",
 		modules.Recursive(true)); err != nil {
 		log.Fatalf("Failed to remove old version: %v", err)
 	}
 
 	// Display the generated playbook
 	fmt.Println("\n" + string([]rune{0x2500}) + " Generated Playbook " + string([]rune{0x2500, 0x2500, 0x2500, 0x2500, 0x2500, 0x2500, 0x2500, 0x2500, 0x2500, 0x2500, 0x2500, 0x2500, 0x2500}))
-	jsonData, err := pb.ToJSON()
+	jsonData, err := b.Playbook().ToJSON()
 	if err != nil {
 		log.Fatalf("Failed to serialize playbook: %v", err)
 	}
@@ -148,6 +148,6 @@ func main() {
 	// }
 
 	fmt.Println("\n✓ Deployment playbook generated successfully!")
-	fmt.Printf("  - Created %d file operations\n", len(pb.Actions))
+	fmt.Printf("  - Created %d file operations\n", len(b.Playbook().Actions))
 	fmt.Println("  - Ready to deploy to: deploy@webapp-01.example.com")
 }

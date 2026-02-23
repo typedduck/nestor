@@ -4,24 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/typedduck/nestor/playbook"
 )
 
-// Playbook represents the playbook structure loaded from playbook.json
+// Playbook wraps the wire-format playbook with agent-side runtime fields.
 type Playbook struct {
-	Version     string            `json:"version"`
-	Name        string            `json:"name"`
-	Created     time.Time         `json:"created"`
-	Controller  string            `json:"controller"`
-	Environment map[string]string `json:"environment"`
-	Actions     []Action          `json:"actions"`
-	ExtractPath string            `json:"-"` // Path where playbook was extracted
-}
-
-// Action represents a single action to execute
-type Action struct {
-	ID     string         `json:"id"`
-	Type   string         `json:"type"`
-	Params map[string]any `json:"params"`
+	playbook.Playbook
+	ExtractPath string `json:"-"` // Path where playbook was extracted
 }
 
 // ExecutionResult represents the result of executing a playbook
@@ -57,7 +47,7 @@ type ExecutionSummary struct {
 // Handler defines the interface that all action handlers must implement
 type Handler interface {
 	// Execute runs the action and returns the result
-	Execute(action Action, context *ExecutionContext) ActionResult
+	Execute(action playbook.Action, context *ExecutionContext) ActionResult
 }
 
 // ExecutionContext provides context to action handlers
@@ -190,7 +180,7 @@ func (e *Engine) Execute() (*ExecutionResult, error) {
 }
 
 // executeAction executes a single action
-func (e *Engine) executeAction(action Action, context *ExecutionContext) ActionResult {
+func (e *Engine) executeAction(action playbook.Action, context *ExecutionContext) ActionResult {
 	// Find handler for this action type
 	handler, exists := e.handlers[action.Type]
 	if !exists {

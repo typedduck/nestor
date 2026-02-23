@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/typedduck/nestor/agent/executor"
+	"github.com/typedduck/nestor/playbook"
 )
 
 func fileContext(fs *executor.MockFileSystem) *executor.ExecutionContext {
@@ -14,8 +15,8 @@ func fileContext(fs *executor.MockFileSystem) *executor.ExecutionContext {
 	}
 }
 
-func fileAction(destination, content string) executor.Action {
-	return executor.Action{
+func fileAction(destination, content string) playbook.Action {
+	return playbook.Action{
 		ID:   "test-file",
 		Type: "file.content",
 		Params: map[string]any{
@@ -28,7 +29,7 @@ func fileAction(destination, content string) executor.Action {
 func TestFileContent_MissingDestination(t *testing.T) {
 	h := NewFileContentHandler()
 	fs := executor.NewMockFileSystem()
-	action := executor.Action{
+	action := playbook.Action{
 		ID:   "test",
 		Type: "file.content",
 		Params: map[string]any{
@@ -44,7 +45,7 @@ func TestFileContent_MissingDestination(t *testing.T) {
 func TestFileContent_MissingContent(t *testing.T) {
 	h := NewFileContentHandler()
 	fs := executor.NewMockFileSystem()
-	action := executor.Action{
+	action := playbook.Action{
 		ID:   "test",
 		Type: "file.content",
 		Params: map[string]any{

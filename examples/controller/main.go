@@ -5,7 +5,7 @@ import (
 
 	"github.com/typedduck/nestor/controller/executor"
 	"github.com/typedduck/nestor/modules"
-	"github.com/typedduck/nestor/playbook"
+	"github.com/typedduck/nestor/playbook/builder"
 )
 
 func main() {
@@ -24,23 +24,23 @@ func simpleDeployment() {
 	log.Println("[INFO ] simple deployment example")
 
 	// Create a playbook
-	pb := playbook.New("simple-webserver")
+	b := builder.New("simple-webserver")
 
 	// Define what to do
-	modules.Package(pb, "update")
-	modules.Package(pb, "install", "nginx", "vim", "git")
+	modules.Package(b, "update")
+	modules.Package(b, "install", "nginx", "vim", "git")
 
-	modules.File(pb, "/var/www/html/index.html",
+	modules.File(b, "/var/www/html/index.html",
 		modules.Content(`<!DOCTYPE html>
 <html>
 <head><title>Welcome</title></head>
 <body><h1>Deployed with Nestor!</h1></body>
 </html>`))
 
-	modules.File(pb, "/etc/motd",
+	modules.File(b, "/etc/motd",
 		modules.Content("Welcome to a nestor-managed server\n"))
 
-	err := executor.Deploy(pb, "user@webserver-01.example.com", &executor.Config{
+	err := executor.Deploy(b.Playbook(), "user@webserver-01.example.com", &executor.Config{
 		SSHKeyPath: "./examples/user-ssh/id_nestor_ed25519",
 		DryRun:     true,
 	})
@@ -55,30 +55,30 @@ func fullDeploymentWithConfig() {
 	log.Println("[INFO ] full deployment with custom config")
 
 	// Create playbook
-	pb := playbook.New("webapp-deployment")
-	pb.SetEnv("APP_VERSION", "v2.0.0")
-	pb.SetEnv("ENVIRONMENT", "production")
+	b := builder.New("webapp-deployment")
+	b.SetEnv("APP_VERSION", "v2.0.0")
+	b.SetEnv("ENVIRONMENT", "production")
 
 	// Install dependencies
-	modules.Package(pb, "install", "nginx", "postgresql", "redis-server")
+	modules.Package(b, "install", "nginx", "postgresql", "redis-server")
 
 	// Create application directory structure
-	modules.Directory(pb, "/opt/webapp",
+	modules.Directory(b, "/opt/webapp",
 		modules.Owner("webapp", "webapp"),
 		modules.Recursive(true))
 
-	modules.Directory(pb, "/opt/webapp/logs",
+	modules.Directory(b, "/opt/webapp/logs",
 		modules.Owner("webapp", "webapp"),
 		modules.Mode(0755))
 
 	// Upload application binary
-	modules.File(pb, "/opt/webapp/app",
+	modules.File(b, "/opt/webapp/app",
 		modules.FromFile("./examples/webapp-v2.0.0/webapp"),
 		modules.Owner("webapp", "webapp"),
 		modules.Mode(0755))
 
 	// Deploy configuration from template
-	modules.File(pb, "/opt/webapp/config.toml",
+	modules.File(b, "/opt/webapp/config.toml",
 		modules.FromTemplate("./examples/webapp-v2.0.0/config.toml.tmpl"),
 		modules.TemplateVars(map[string]string{
 			"DBHost":    "db.example.com",
@@ -93,7 +93,7 @@ func fullDeploymentWithConfig() {
 		modules.Mode(0640))
 
 	// Create systemd service
-	modules.File(pb, "/etc/systemd/system/webapp.service",
+	modules.File(b, "/etc/systemd/system/webapp.service",
 		modules.FromTemplate("./examples/webapp-v2.0.0/webapp.service.tmpl"),
 		modules.TemplateVars(map[string]string{
 			"WorkingDirectory": "/opt/webapp",
@@ -103,19 +103,19 @@ func fullDeploymentWithConfig() {
 		}))
 
 	// Configure nginx
-	modules.File(pb, "/etc/nginx/sites-available/webapp",
+	modules.File(b, "/etc/nginx/sites-available/webapp",
 		modules.FromTemplate("./examples/webapp-v2.0.0/nginx-webapp.conf.tmpl"),
 		modules.TemplateVars(map[string]string{
 			"ServerName": "webapp.example.com",
 			"ProxyPass":  "http://127.0.0.1:8080",
 		}))
 
-	modules.Symlink(pb,
+	modules.Symlink(b,
 		"/etc/nginx/sites-enabled/webapp",
 		"/etc/nginx/sites-available/webapp")
 
 	// Deploy the playbook
-	err := executor.Deploy(pb, "deploy@webapp-01.example.com", &executor.Config{
+	err := executor.Deploy(b.Playbook(), "deploy@webapp-01.example.com", &executor.Config{
 		// WorkDir:        "/tmp/nestor-work",
 		// SSHKeyPath:     "/home/user/.ssh/deploy_key",
 		// SigningKeyPath: "/home/user/.ssh/nestor_signing_key",

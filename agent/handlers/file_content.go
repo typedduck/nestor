@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/typedduck/nestor/agent/executor"
+	"github.com/typedduck/nestor/playbook"
 )
 
 // FileContentHandler handles creating files with inline content
@@ -17,7 +18,7 @@ func NewFileContentHandler() *FileContentHandler {
 }
 
 // Execute creates a file with the specified content
-func (h *FileContentHandler) Execute(action executor.Action,
+func (h *FileContentHandler) Execute(action playbook.Action,
 	context *executor.ExecutionContext) executor.ActionResult {
 	// Extract parameters
 	destination, ok := action.Params["destination"].(string)

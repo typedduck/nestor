@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/typedduck/nestor/agent/executor"
+	"github.com/typedduck/nestor/playbook"
 )
 
 func dirContext(fs *executor.MockFileSystem) *executor.ExecutionContext {
@@ -14,8 +15,8 @@ func dirContext(fs *executor.MockFileSystem) *executor.ExecutionContext {
 	}
 }
 
-func dirAction(path string) executor.Action {
-	return executor.Action{
+func dirAction(path string) playbook.Action {
+	return playbook.Action{
 		ID:   "test-dir",
 		Type: "directory.create",
 		Params: map[string]any{
@@ -27,7 +28,7 @@ func dirAction(path string) executor.Action {
 func TestDirectoryCreate_MissingPath(t *testing.T) {
 	h := NewDirectoryCreateHandler()
 	fs := executor.NewMockFileSystem()
-	action := executor.Action{
+	action := playbook.Action{
 		ID:     "test",
 		Type:   "directory.create",
 		Params: map[string]any{},

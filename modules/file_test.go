@@ -3,23 +3,23 @@ package modules
 import (
 	"testing"
 
-	"github.com/typedduck/nestor/playbook"
+	"github.com/typedduck/nestor/playbook/builder"
 )
 
 // TestFileWithContent verifies creating a file with inline content
 func TestFileWithContent(t *testing.T) {
-	pb := playbook.New("test-playbook")
+	b := builder.New("test-playbook")
 
-	err := File(pb, "/etc/motd", Content("Welcome to the server\n"))
+	err := File(b, "/etc/motd", Content("Welcome to the server\n"))
 	if err != nil {
 		t.Fatalf("File with content failed: %v", err)
 	}
 
-	if len(pb.Actions) != 1 {
-		t.Fatalf("Expected 1 action, got %d", len(pb.Actions))
+	if len(b.Playbook().Actions) != 1 {
+		t.Fatalf("Expected 1 action, got %d", len(b.Playbook().Actions))
 	}
 
-	action := pb.Actions[0]
+	action := b.Playbook().Actions[0]
 	if action.Type != "file.content" {
 		t.Errorf("Expected action type 'file.content', got '%s'", action.Type)
 	}
@@ -37,25 +37,25 @@ func TestFileWithContent(t *testing.T) {
 
 // TestFileWithTemplate verifies creating a file from a template
 func TestFileWithTemplate(t *testing.T) {
-	pb := playbook.New("test-playbook")
+	b := builder.New("test-playbook")
 
 	vars := map[string]string{
 		"DBHost": "db.example.com",
 		"DBPort": "5432",
 	}
 
-	err := File(pb, "/etc/app/config.yml",
+	err := File(b, "/etc/app/config.yml",
 		FromTemplate("config.yml.tmpl"),
 		TemplateVars(vars))
 	if err != nil {
 		t.Fatalf("File with template failed: %v", err)
 	}
 
-	if len(pb.Actions) != 1 {
-		t.Fatalf("Expected 1 action, got %d", len(pb.Actions))
+	if len(b.Playbook().Actions) != 1 {
+		t.Fatalf("Expected 1 action, got %d", len(b.Playbook().Actions))
 	}
 
-	action := pb.Actions[0]
+	action := b.Playbook().Actions[0]
 	if action.Type != "file.template" {
 		t.Errorf("Expected action type 'file.template', got '%s'", action.Type)
 	}
@@ -77,20 +77,20 @@ func TestFileWithTemplate(t *testing.T) {
 
 // TestFileUpload verifies uploading a local file
 func TestFileUpload(t *testing.T) {
-	pb := playbook.New("test-playbook")
+	b := builder.New("test-playbook")
 
-	err := File(pb, "/usr/local/bin/myapp",
+	err := File(b, "/usr/local/bin/myapp",
 		FromFile("./build/myapp"),
 		Mode(0755))
 	if err != nil {
 		t.Fatalf("File upload failed: %v", err)
 	}
 
-	if len(pb.Actions) != 1 {
-		t.Fatalf("Expected 1 action, got %d", len(pb.Actions))
+	if len(b.Playbook().Actions) != 1 {
+		t.Fatalf("Expected 1 action, got %d", len(b.Playbook().Actions))
 	}
 
-	action := pb.Actions[0]
+	action := b.Playbook().Actions[0]
 	if action.Type != "file.upload" {
 		t.Errorf("Expected action type 'file.upload', got '%s'", action.Type)
 	}
@@ -108,9 +108,9 @@ func TestFileUpload(t *testing.T) {
 
 // TestFileWithOwnership verifies setting file owner and group
 func TestFileWithOwnership(t *testing.T) {
-	pb := playbook.New("test-playbook")
+	b := builder.New("test-playbook")
 
-	err := File(pb, "/etc/app/secret.conf",
+	err := File(b, "/etc/app/secret.conf",
 		Content("api_key=secret123"),
 		Owner("appuser", "appgroup"),
 		Mode(0600))
@@ -118,7 +118,7 @@ func TestFileWithOwnership(t *testing.T) {
 		t.Fatalf("File with ownership failed: %v", err)
 	}
 
-	action := pb.Actions[0]
+	action := b.Playbook().Actions[0]
 
 	owner, ok := action.Params["owner"].(string)
 	if !ok || owner != "appuser" {
@@ -138,34 +138,34 @@ func TestFileWithOwnership(t *testing.T) {
 
 // TestFileNoSource verifies error when no source is specified
 func TestFileNoSource(t *testing.T) {
-	pb := playbook.New("test-playbook")
+	b := builder.New("test-playbook")
 
-	err := File(pb, "/etc/test.conf")
+	err := File(b, "/etc/test.conf")
 	if err == nil {
 		t.Fatal("Expected error when no source specified")
 	}
 
-	if len(pb.Actions) != 0 {
-		t.Errorf("Expected 0 actions after error, got %d", len(pb.Actions))
+	if len(b.Playbook().Actions) != 0 {
+		t.Errorf("Expected 0 actions after error, got %d", len(b.Playbook().Actions))
 	}
 }
 
 // TestDirectory verifies directory creation
 func TestDirectory(t *testing.T) {
-	pb := playbook.New("test-playbook")
+	b := builder.New("test-playbook")
 
-	err := Directory(pb, "/var/app/data",
+	err := Directory(b, "/var/app/data",
 		Owner("appuser", "appgroup"),
 		Mode(0750))
 	if err != nil {
 		t.Fatalf("Directory creation failed: %v", err)
 	}
 
-	if len(pb.Actions) != 1 {
-		t.Fatalf("Expected 1 action, got %d", len(pb.Actions))
+	if len(b.Playbook().Actions) != 1 {
+		t.Fatalf("Expected 1 action, got %d", len(b.Playbook().Actions))
 	}
 
-	action := pb.Actions[0]
+	action := b.Playbook().Actions[0]
 	if action.Type != "directory.create" {
 		t.Errorf("Expected action type 'directory.create', got '%s'", action.Type)
 	}
@@ -188,15 +188,15 @@ func TestDirectory(t *testing.T) {
 
 // TestDirectoryRecursive verifies recursive directory creation
 func TestDirectoryRecursive(t *testing.T) {
-	pb := playbook.New("test-playbook")
+	b := builder.New("test-playbook")
 
-	err := Directory(pb, "/var/app/data/logs",
+	err := Directory(b, "/var/app/data/logs",
 		Recursive(true))
 	if err != nil {
 		t.Fatalf("Recursive directory creation failed: %v", err)
 	}
 
-	action := pb.Actions[0]
+	action := b.Playbook().Actions[0]
 
 	recursive, ok := action.Params["recursive"].(bool)
 	if !ok || !recursive {
@@ -206,20 +206,20 @@ func TestDirectoryRecursive(t *testing.T) {
 
 // TestSymlink verifies symlink creation
 func TestSymlink(t *testing.T) {
-	pb := playbook.New("test-playbook")
+	b := builder.New("test-playbook")
 
-	err := Symlink(pb,
+	err := Symlink(b,
 		"/etc/nginx/sites-enabled/myapp",
 		"/etc/nginx/sites-available/myapp")
 	if err != nil {
 		t.Fatalf("Symlink creation failed: %v", err)
 	}
 
-	if len(pb.Actions) != 1 {
-		t.Fatalf("Expected 1 action, got %d", len(pb.Actions))
+	if len(b.Playbook().Actions) != 1 {
+		t.Fatalf("Expected 1 action, got %d", len(b.Playbook().Actions))
 	}
 
-	action := pb.Actions[0]
+	action := b.Playbook().Actions[0]
 	if action.Type != "file.symlink" {
 		t.Errorf("Expected action type 'file.symlink', got '%s'", action.Type)
 	}
@@ -237,18 +237,18 @@ func TestSymlink(t *testing.T) {
 
 // TestRemove verifies file removal
 func TestRemove(t *testing.T) {
-	pb := playbook.New("test-playbook")
+	b := builder.New("test-playbook")
 
-	err := Remove(pb, "/tmp/old-config.conf")
+	err := Remove(b, "/tmp/old-config.conf")
 	if err != nil {
 		t.Fatalf("Remove failed: %v", err)
 	}
 
-	if len(pb.Actions) != 1 {
-		t.Fatalf("Expected 1 action, got %d", len(pb.Actions))
+	if len(b.Playbook().Actions) != 1 {
+		t.Fatalf("Expected 1 action, got %d", len(b.Playbook().Actions))
 	}
 
-	action := pb.Actions[0]
+	action := b.Playbook().Actions[0]
 	if action.Type != "file.remove" {
 		t.Errorf("Expected action type 'file.remove', got '%s'", action.Type)
 	}
@@ -266,14 +266,14 @@ func TestRemove(t *testing.T) {
 
 // TestRemoveRecursive verifies recursive directory removal
 func TestRemoveRecursive(t *testing.T) {
-	pb := playbook.New("test-playbook")
+	b := builder.New("test-playbook")
 
-	err := Remove(pb, "/var/app/old-version", Recursive(true))
+	err := Remove(b, "/var/app/old-version", Recursive(true))
 	if err != nil {
 		t.Fatalf("Recursive remove failed: %v", err)
 	}
 
-	action := pb.Actions[0]
+	action := b.Playbook().Actions[0]
 
 	recursive, ok := action.Params["recursive"].(bool)
 	if !ok || !recursive {
@@ -283,26 +283,26 @@ func TestRemoveRecursive(t *testing.T) {
 
 // TestMultipleFileOperations verifies multiple file operations in sequence
 func TestMultipleFileOperations(t *testing.T) {
-	pb := playbook.New("test-playbook")
+	b := builder.New("test-playbook")
 
 	// Create directory
-	Directory(pb, "/var/app", Owner("appuser", "appgroup"))
+	Directory(b, "/var/app", Owner("appuser", "appgroup"))
 
 	// Upload file
-	File(pb, "/var/app/myapp",
+	File(b, "/var/app/myapp",
 		FromFile("./build/myapp"),
 		Mode(0755))
 
 	// Create config from template
-	File(pb, "/var/app/config.yml",
+	File(b, "/var/app/config.yml",
 		FromTemplate("config.yml.tmpl"),
 		TemplateVars(map[string]string{"Port": "8080"}))
 
 	// Create symlink
-	Symlink(pb, "/usr/local/bin/myapp", "/var/app/myapp")
+	Symlink(b, "/usr/local/bin/myapp", "/var/app/myapp")
 
-	if len(pb.Actions) != 4 {
-		t.Fatalf("Expected 4 actions, got %d", len(pb.Actions))
+	if len(b.Playbook().Actions) != 4 {
+		t.Fatalf("Expected 4 actions, got %d", len(b.Playbook().Actions))
 	}
 
 	expectedTypes := []string{
@@ -313,24 +313,24 @@ func TestMultipleFileOperations(t *testing.T) {
 	}
 
 	for i, expectedType := range expectedTypes {
-		if pb.Actions[i].Type != expectedType {
+		if b.Playbook().Actions[i].Type != expectedType {
 			t.Errorf("Action[%d]: expected type '%s', got '%s'",
-				i, expectedType, pb.Actions[i].Type)
+				i, expectedType, b.Playbook().Actions[i].Type)
 		}
 	}
 }
 
 // TestFileDefaultPermissions verifies default permissions are not added unnecessarily
 func TestFileDefaultPermissions(t *testing.T) {
-	pb := playbook.New("test-playbook")
+	b := builder.New("test-playbook")
 
 	// Create file without specifying mode (should use default 0644)
-	err := File(pb, "/etc/test.conf", Content("test"))
+	err := File(b, "/etc/test.conf", Content("test"))
 	if err != nil {
 		t.Fatalf("File creation failed: %v", err)
 	}
 
-	action := pb.Actions[0]
+	action := b.Playbook().Actions[0]
 
 	// Default mode should not be added to params to keep JSON clean
 	if _, exists := action.Params["mode"]; exists {
@@ -340,32 +340,32 @@ func TestFileDefaultPermissions(t *testing.T) {
 
 // TestFileActionIDs verifies that actions get sequential IDs
 func TestFileActionIDs(t *testing.T) {
-	pb := playbook.New("test-playbook")
+	b := builder.New("test-playbook")
 
-	File(pb, "/etc/file1", Content("content1"))
-	Directory(pb, "/var/data")
-	Symlink(pb, "/link", "/target")
+	File(b, "/etc/file1", Content("content1"))
+	Directory(b, "/var/data")
+	Symlink(b, "/link", "/target")
 
 	expectedIDs := []string{"action-001", "action-002", "action-003"}
 	for i, expectedID := range expectedIDs {
-		if pb.Actions[i].ID != expectedID {
+		if b.Playbook().Actions[i].ID != expectedID {
 			t.Errorf("Action[%d]: expected ID '%s', got '%s'",
-				i, expectedID, pb.Actions[i].ID)
+				i, expectedID, b.Playbook().Actions[i].ID)
 		}
 	}
 }
 
 // TestTemplateWithoutVars verifies template can be used without variables
 func TestTemplateWithoutVars(t *testing.T) {
-	pb := playbook.New("test-playbook")
+	b := builder.New("test-playbook")
 
-	err := File(pb, "/etc/config",
+	err := File(b, "/etc/config",
 		FromTemplate("config.tmpl"))
 	if err != nil {
 		t.Fatalf("Template without vars failed: %v", err)
 	}
 
-	action := pb.Actions[0]
+	action := b.Playbook().Actions[0]
 
 	// Should have nil/empty variables map
 	vars := action.Params["variables"]

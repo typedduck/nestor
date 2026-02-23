@@ -18,6 +18,7 @@ import (
 	"github.com/typedduck/nestor/controller/signer"
 	"github.com/typedduck/nestor/modules"
 	"github.com/typedduck/nestor/playbook"
+	"github.com/typedduck/nestor/playbook/builder"
 )
 
 // buildPlaybookArchive creates a signed playbook archive in a temp directory.
@@ -71,12 +72,12 @@ func TestPackageInstall_InstallsPackage(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	pb := playbook.New("test-install-" + fmt.Sprintf("%d", time.Now().UnixNano()))
-	if err := modules.Package(pb, "install", "curl"); err != nil {
+	b := builder.New("test-install-" + fmt.Sprintf("%d", time.Now().UnixNano()))
+	if err := modules.Package(b, "install", "curl"); err != nil {
 		t.Fatalf("build playbook: %v", err)
 	}
 
-	pkg := buildPlaybookArchive(t, pb)
+	pkg := buildPlaybookArchive(t, b.Playbook())
 
 	if err := suite.copyToContainer(ctx, pkg.ArchivePath, "/tmp/test-install.tar.gz"); err != nil {
 		t.Fatalf("copy archive: %v", err)
@@ -108,12 +109,12 @@ func TestPackageInstall_Idempotent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	pb := playbook.New("test-idempotent-" + fmt.Sprintf("%d", time.Now().UnixNano()))
-	if err := modules.Package(pb, "install", "curl"); err != nil {
+	b := builder.New("test-idempotent-" + fmt.Sprintf("%d", time.Now().UnixNano()))
+	if err := modules.Package(b, "install", "curl"); err != nil {
 		t.Fatalf("build playbook: %v", err)
 	}
 
-	pkg := buildPlaybookArchive(t, pb)
+	pkg := buildPlaybookArchive(t, b.Playbook())
 
 	if err := suite.copyToContainer(ctx, pkg.ArchivePath, "/tmp/test-idempotent.tar.gz"); err != nil {
 		t.Fatalf("copy archive: %v", err)

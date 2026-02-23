@@ -3,23 +3,23 @@ package modules
 import (
 	"testing"
 
-	"github.com/typedduck/nestor/playbook"
+	"github.com/typedduck/nestor/playbook/builder"
 )
 
 // TestPackageInstall verifies that Package install operation adds correct actions
 func TestPackageInstall(t *testing.T) {
-	pb := playbook.New("test-playbook")
+	b := builder.New("test-playbook")
 
-	err := Package(pb, "install", "vim", "git", "htop")
+	err := Package(b, "install", "vim", "git", "htop")
 	if err != nil {
 		t.Fatalf("Package install failed: %v", err)
 	}
 
-	if len(pb.Actions) != 1 {
-		t.Fatalf("Expected 1 action, got %d", len(pb.Actions))
+	if len(b.Playbook().Actions) != 1 {
+		t.Fatalf("Expected 1 action, got %d", len(b.Playbook().Actions))
 	}
 
-	action := pb.Actions[0]
+	action := b.Playbook().Actions[0]
 	if action.Type != "package.install" {
 		t.Errorf("Expected action type 'package.install', got '%s'", action.Type)
 	}
@@ -48,32 +48,32 @@ func TestPackageInstall(t *testing.T) {
 
 // TestPackageInstallNoPackages verifies error handling when no packages specified
 func TestPackageInstallNoPackages(t *testing.T) {
-	pb := playbook.New("test-playbook")
+	b := builder.New("test-playbook")
 
-	err := Package(pb, "install")
+	err := Package(b, "install")
 	if err == nil {
 		t.Fatal("Expected error when installing with no packages")
 	}
 
-	if len(pb.Actions) != 0 {
-		t.Errorf("Expected 0 actions after error, got %d", len(pb.Actions))
+	if len(b.Playbook().Actions) != 0 {
+		t.Errorf("Expected 0 actions after error, got %d", len(b.Playbook().Actions))
 	}
 }
 
 // TestPackageRemove verifies that Package remove operation works correctly
 func TestPackageRemove(t *testing.T) {
-	pb := playbook.New("test-playbook")
+	b := builder.New("test-playbook")
 
-	err := Package(pb, "remove", "apache2")
+	err := Package(b, "remove", "apache2")
 	if err != nil {
 		t.Fatalf("Package remove failed: %v", err)
 	}
 
-	if len(pb.Actions) != 1 {
-		t.Fatalf("Expected 1 action, got %d", len(pb.Actions))
+	if len(b.Playbook().Actions) != 1 {
+		t.Fatalf("Expected 1 action, got %d", len(b.Playbook().Actions))
 	}
 
-	action := pb.Actions[0]
+	action := b.Playbook().Actions[0]
 	if action.Type != "package.remove" {
 		t.Errorf("Expected action type 'package.remove', got '%s'", action.Type)
 	}
@@ -90,18 +90,18 @@ func TestPackageRemove(t *testing.T) {
 
 // TestPackageUpdate verifies that Package update operation works correctly
 func TestPackageUpdate(t *testing.T) {
-	pb := playbook.New("test-playbook")
+	b := builder.New("test-playbook")
 
-	err := Package(pb, "update")
+	err := Package(b, "update")
 	if err != nil {
 		t.Fatalf("Package update failed: %v", err)
 	}
 
-	if len(pb.Actions) != 1 {
-		t.Fatalf("Expected 1 action, got %d", len(pb.Actions))
+	if len(b.Playbook().Actions) != 1 {
+		t.Fatalf("Expected 1 action, got %d", len(b.Playbook().Actions))
 	}
 
-	action := pb.Actions[0]
+	action := b.Playbook().Actions[0]
 	if action.Type != "package.update" {
 		t.Errorf("Expected action type 'package.update', got '%s'", action.Type)
 	}
@@ -109,18 +109,18 @@ func TestPackageUpdate(t *testing.T) {
 
 // TestPackageUpgrade verifies that Package upgrade operation works correctly
 func TestPackageUpgrade(t *testing.T) {
-	pb := playbook.New("test-playbook")
+	b := builder.New("test-playbook")
 
-	err := Package(pb, "upgrade")
+	err := Package(b, "upgrade")
 	if err != nil {
 		t.Fatalf("Package upgrade failed: %v", err)
 	}
 
-	if len(pb.Actions) != 1 {
-		t.Fatalf("Expected 1 action, got %d", len(pb.Actions))
+	if len(b.Playbook().Actions) != 1 {
+		t.Fatalf("Expected 1 action, got %d", len(b.Playbook().Actions))
 	}
 
-	action := pb.Actions[0]
+	action := b.Playbook().Actions[0]
 	if action.Type != "package.upgrade" {
 		t.Errorf("Expected action type 'package.upgrade', got '%s'", action.Type)
 	}
@@ -128,54 +128,54 @@ func TestPackageUpgrade(t *testing.T) {
 
 // TestPackageInvalidOperation verifies error handling for invalid operations
 func TestPackageInvalidOperation(t *testing.T) {
-	pb := playbook.New("test-playbook")
+	b := builder.New("test-playbook")
 
-	err := Package(pb, "invalidop", "somepackage")
+	err := Package(b, "invalidop", "somepackage")
 	if err == nil {
 		t.Fatal("Expected error for invalid operation")
 	}
 
-	if len(pb.Actions) != 0 {
-		t.Errorf("Expected 0 actions after error, got %d", len(pb.Actions))
+	if len(b.Playbook().Actions) != 0 {
+		t.Errorf("Expected 0 actions after error, got %d", len(b.Playbook().Actions))
 	}
 }
 
 // TestPackageMultipleOperations verifies multiple package operations in sequence
 func TestPackageMultipleOperations(t *testing.T) {
-	pb := playbook.New("test-playbook")
+	b := builder.New("test-playbook")
 
 	// Update cache
-	if err := Package(pb, "update"); err != nil {
+	if err := Package(b, "update"); err != nil {
 		t.Fatalf("Package update failed: %v", err)
 	}
 
 	// Install packages
-	if err := Package(pb, "install", "nginx", "vim"); err != nil {
+	if err := Package(b, "install", "nginx", "vim"); err != nil {
 		t.Fatalf("Package install failed: %v", err)
 	}
 
 	// Remove package
-	if err := Package(pb, "remove", "apache2"); err != nil {
+	if err := Package(b, "remove", "apache2"); err != nil {
 		t.Fatalf("Package remove failed: %v", err)
 	}
 
-	if len(pb.Actions) != 3 {
-		t.Fatalf("Expected 3 actions, got %d", len(pb.Actions))
+	if len(b.Playbook().Actions) != 3 {
+		t.Fatalf("Expected 3 actions, got %d", len(b.Playbook().Actions))
 	}
 
 	// Verify action sequence
 	expectedTypes := []string{"package.update", "package.install", "package.remove"}
 	for i, expectedType := range expectedTypes {
-		if pb.Actions[i].Type != expectedType {
+		if b.Playbook().Actions[i].Type != expectedType {
 			t.Errorf("Action[%d]: expected type '%s', got '%s'",
-				i, expectedType, pb.Actions[i].Type)
+				i, expectedType, b.Playbook().Actions[i].Type)
 		}
 	}
 }
 
 // TestPackageWithOptions verifies the extended options interface
 func TestPackageWithOptions(t *testing.T) {
-	pb := playbook.New("test-playbook")
+	b := builder.New("test-playbook")
 
 	opts := &PackageOptions{
 		UpdateCache:    false,
@@ -183,16 +183,16 @@ func TestPackageWithOptions(t *testing.T) {
 		Force:          true,
 	}
 
-	err := PackageWithOptions(pb, "install", []string{"nginx"}, opts)
+	err := PackageWithOptions(b, "install", []string{"nginx"}, opts)
 	if err != nil {
 		t.Fatalf("PackageWithOptions failed: %v", err)
 	}
 
-	if len(pb.Actions) != 1 {
-		t.Fatalf("Expected 1 action, got %d", len(pb.Actions))
+	if len(b.Playbook().Actions) != 1 {
+		t.Fatalf("Expected 1 action, got %d", len(b.Playbook().Actions))
 	}
 
-	action := pb.Actions[0]
+	action := b.Playbook().Actions[0]
 
 	if updateCache, ok := action.Params["update_cache"].(bool); !ok || updateCache {
 		t.Error("Expected update_cache to be false")
@@ -209,17 +209,17 @@ func TestPackageWithOptions(t *testing.T) {
 
 // TestPackageActionIDs verifies that actions get sequential IDs
 func TestPackageActionIDs(t *testing.T) {
-	pb := playbook.New("test-playbook")
+	b := builder.New("test-playbook")
 
-	Package(pb, "install", "vim")
-	Package(pb, "install", "git")
-	Package(pb, "install", "htop")
+	Package(b, "install", "vim")
+	Package(b, "install", "git")
+	Package(b, "install", "htop")
 
 	expectedIDs := []string{"action-001", "action-002", "action-003"}
 	for i, expectedID := range expectedIDs {
-		if pb.Actions[i].ID != expectedID {
+		if b.Playbook().Actions[i].ID != expectedID {
 			t.Errorf("Action[%d]: expected ID '%s', got '%s'",
-				i, expectedID, pb.Actions[i].ID)
+				i, expectedID, b.Playbook().Actions[i].ID)
 		}
 	}
 }

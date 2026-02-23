@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/typedduck/nestor/agent/executor"
+	"github.com/typedduck/nestor/playbook"
 )
 
 func aptContext(cmd *executor.MockCommandRunner) *executor.ExecutionContext {
@@ -30,12 +31,12 @@ func dnfContext(cmd *executor.MockCommandRunner) *executor.ExecutionContext {
 	}
 }
 
-func pkgAction(packages ...string) executor.Action {
+func pkgAction(packages ...string) playbook.Action {
 	pkgs := make([]any, len(packages))
 	for i, p := range packages {
 		pkgs[i] = p
 	}
-	return executor.Action{
+	return playbook.Action{
 		ID:   "test-pkg",
 		Type: "package.install",
 		Params: map[string]any{
@@ -47,7 +48,7 @@ func pkgAction(packages ...string) executor.Action {
 func TestPackageInstall_MissingPackagesParam(t *testing.T) {
 	h := NewPackageInstallHandler()
 	cmd := executor.NewMockCommandRunner()
-	action := executor.Action{
+	action := playbook.Action{
 		ID:     "test",
 		Type:   "package.install",
 		Params: map[string]any{},
@@ -61,7 +62,7 @@ func TestPackageInstall_MissingPackagesParam(t *testing.T) {
 func TestPackageInstall_InvalidPackagesType(t *testing.T) {
 	h := NewPackageInstallHandler()
 	cmd := executor.NewMockCommandRunner()
-	action := executor.Action{
+	action := playbook.Action{
 		ID:   "test",
 		Type: "package.install",
 		Params: map[string]any{
@@ -77,7 +78,7 @@ func TestPackageInstall_InvalidPackagesType(t *testing.T) {
 func TestPackageInstall_EmptyPackages(t *testing.T) {
 	h := NewPackageInstallHandler()
 	cmd := executor.NewMockCommandRunner()
-	action := executor.Action{
+	action := playbook.Action{
 		ID:   "test",
 		Type: "package.install",
 		Params: map[string]any{

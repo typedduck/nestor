@@ -16,14 +16,15 @@ import (
 
 	"github.com/typedduck/nestor/controller/packager"
 	"github.com/typedduck/nestor/playbook"
+	"github.com/typedduck/nestor/playbook/builder"
 )
 
 // --- helpers ---
 
-func newPlaybook(name string) *playbook.Playbook {
-	pb := playbook.New(name)
-	pb.Controller = "test-controller"
-	return pb
+func newBuilder(name string) *builder.Builder {
+	b := builder.New(name)
+	b.Playbook().Controller = "test-controller"
+	return b
 }
 
 func sha256hex(data []byte) string {
@@ -133,13 +134,13 @@ func writeSourceFile(t *testing.T, dir, name string, content []byte) string {
 
 func TestPackage_BasicPlaybook(t *testing.T) {
 	workDir := t.TempDir()
-	pb := newPlaybook("myplaybook")
-	pb.AddAction(playbook.Action{
+	b := newBuilder("myplaybook")
+	b.AddAction(playbook.Action{
 		Type:   "package.install",
 		Params: map[string]any{"packages": []string{"nginx"}},
 	})
 
-	pkg, err := packager.New(workDir).Package(pb)
+	pkg, err := packager.New(workDir).Package(b.Playbook())
 	if err != nil {
 		t.Fatalf("Package: %v", err)
 	}
@@ -155,9 +156,9 @@ func TestPackage_BasicPlaybook(t *testing.T) {
 
 func TestPackage_ReturnedPathsExist(t *testing.T) {
 	workDir := t.TempDir()
-	pb := newPlaybook("mypb")
+	b := newBuilder("mypb")
 
-	pkg, err := packager.New(workDir).Package(pb)
+	pkg, err := packager.New(workDir).Package(b.Playbook())
 	if err != nil {
 		t.Fatalf("Package: %v", err)
 	}
@@ -171,9 +172,9 @@ func TestPackage_ReturnedPathsExist(t *testing.T) {
 
 func TestPackage_ArchiveNameMatchesPlaybook(t *testing.T) {
 	workDir := t.TempDir()
-	pb := newPlaybook("my-server")
+	b := newBuilder("my-server")
 
-	pkg, err := packager.New(workDir).Package(pb)
+	pkg, err := packager.New(workDir).Package(b.Playbook())
 	if err != nil {
 		t.Fatalf("Package: %v", err)
 	}
@@ -186,14 +187,14 @@ func TestPackage_ArchiveNameMatchesPlaybook(t *testing.T) {
 
 func TestPackage_PlaybookJSONIsValidJSON(t *testing.T) {
 	workDir := t.TempDir()
-	pb := newPlaybook("mypb")
-	pb.SetEnv("KEY", "VALUE")
-	pb.AddAction(playbook.Action{
+	b := newBuilder("mypb")
+	b.SetEnv("KEY", "VALUE")
+	b.AddAction(playbook.Action{
 		Type:   "package.install",
 		Params: map[string]any{"packages": []string{"curl"}},
 	})
 
-	pkg, err := packager.New(workDir).Package(pb)
+	pkg, err := packager.New(workDir).Package(b.Playbook())
 	if err != nil {
 		t.Fatalf("Package: %v", err)
 	}
@@ -217,9 +218,9 @@ func TestPackage_PlaybookJSONIsValidJSON(t *testing.T) {
 
 func TestPackage_PlaybookJSONInArchiveMatchesDisk(t *testing.T) {
 	workDir := t.TempDir()
-	pb := newPlaybook("mypb")
+	b := newBuilder("mypb")
 
-	pkg, err := packager.New(workDir).Package(pb)
+	pkg, err := packager.New(workDir).Package(b.Playbook())
 	if err != nil {
 		t.Fatalf("Package: %v", err)
 	}
@@ -237,9 +238,9 @@ func TestPackage_PlaybookJSONInArchiveMatchesDisk(t *testing.T) {
 
 func TestPackage_ManifestChecksumForPlaybookJSON(t *testing.T) {
 	workDir := t.TempDir()
-	pb := newPlaybook("mypb")
+	b := newBuilder("mypb")
 
-	pkg, err := packager.New(workDir).Package(pb)
+	pkg, err := packager.New(workDir).Package(b.Playbook())
 	if err != nil {
 		t.Fatalf("Package: %v", err)
 	}
@@ -258,9 +259,9 @@ func TestPackage_ManifestChecksumForPlaybookJSON(t *testing.T) {
 
 func TestPackage_ManifestInArchive(t *testing.T) {
 	workDir := t.TempDir()
-	pb := newPlaybook("mypb")
+	b := newBuilder("mypb")
 
-	pkg, err := packager.New(workDir).Package(pb)
+	pkg, err := packager.New(workDir).Package(b.Playbook())
 	if err != nil {
 		t.Fatalf("Package: %v", err)
 	}
@@ -278,13 +279,13 @@ func TestPackage_FileUploadCopiedToArchive(t *testing.T) {
 	content := []byte("server { listen 80; }")
 	src := writeSourceFile(t, srcDir, "nginx.conf", content)
 
-	pb := newPlaybook("mypb")
-	pb.AddAction(playbook.Action{
+	b := newBuilder("mypb")
+	b.AddAction(playbook.Action{
 		Type:   "file.upload",
 		Params: map[string]any{"source": src, "destination": "/etc/nginx/nginx.conf"},
 	})
 
-	pkg, err := packager.New(workDir).Package(pb)
+	pkg, err := packager.New(workDir).Package(b.Playbook())
 	if err != nil {
 		t.Fatalf("Package: %v", err)
 	}
@@ -306,13 +307,13 @@ func TestPackage_FileTemplateCopiedToArchive(t *testing.T) {
 	workDir := t.TempDir()
 	src := writeSourceFile(t, srcDir, "greeting.tmpl", []byte("Hello {{ .Name }}"))
 
-	pb := newPlaybook("mypb")
-	pb.AddAction(playbook.Action{
+	b := newBuilder("mypb")
+	b.AddAction(playbook.Action{
 		Type:   "file.template",
 		Params: map[string]any{"source": src, "destination": "/etc/greeting"},
 	})
 
-	pkg, err := packager.New(workDir).Package(pb)
+	pkg, err := packager.New(workDir).Package(b.Playbook())
 	if err != nil {
 		t.Fatalf("Package: %v", err)
 	}
@@ -329,13 +330,13 @@ func TestPackage_UploadSourceRewrittenInPlaybookJSON(t *testing.T) {
 	workDir := t.TempDir()
 	src := writeSourceFile(t, srcDir, "app.conf", []byte("config"))
 
-	pb := newPlaybook("mypb")
-	pb.AddAction(playbook.Action{
+	b := newBuilder("mypb")
+	b.AddAction(playbook.Action{
 		Type:   "file.upload",
 		Params: map[string]any{"source": src, "destination": "/etc/app.conf"},
 	})
 
-	pkg, err := packager.New(workDir).Package(pb)
+	pkg, err := packager.New(workDir).Package(b.Playbook())
 	if err != nil {
 		t.Fatalf("Package: %v", err)
 	}
@@ -368,13 +369,13 @@ func TestPackage_TemplateSourceRewrittenInPlaybookJSON(t *testing.T) {
 	workDir := t.TempDir()
 	src := writeSourceFile(t, srcDir, "page.tmpl", []byte("{{ .Title }}"))
 
-	pb := newPlaybook("mypb")
-	pb.AddAction(playbook.Action{
+	b := newBuilder("mypb")
+	b.AddAction(playbook.Action{
 		Type:   "file.template",
 		Params: map[string]any{"source": src, "destination": "/etc/page"},
 	})
 
-	pkg, err := packager.New(workDir).Package(pb)
+	pkg, err := packager.New(workDir).Package(b.Playbook())
 	if err != nil {
 		t.Fatalf("Package: %v", err)
 	}
@@ -404,17 +405,17 @@ func TestPackage_DuplicateSourcesDeduped(t *testing.T) {
 	workDir := t.TempDir()
 	src := writeSourceFile(t, srcDir, "shared.conf", []byte("shared"))
 
-	pb := newPlaybook("mypb")
-	pb.AddAction(playbook.Action{
+	b := newBuilder("mypb")
+	b.AddAction(playbook.Action{
 		Type:   "file.upload",
 		Params: map[string]any{"source": src, "destination": "/etc/a.conf"},
 	})
-	pb.AddAction(playbook.Action{
+	b.AddAction(playbook.Action{
 		Type:   "file.upload",
 		Params: map[string]any{"source": src, "destination": "/etc/b.conf"},
 	})
 
-	pkg, err := packager.New(workDir).Package(pb)
+	pkg, err := packager.New(workDir).Package(b.Playbook())
 	if err != nil {
 		t.Fatalf("Package: %v", err)
 	}
@@ -436,13 +437,13 @@ func TestPackage_ManifestIncludesUploadFiles(t *testing.T) {
 	content := []byte("important config")
 	src := writeSourceFile(t, srcDir, "service.conf", content)
 
-	pb := newPlaybook("mypb")
-	pb.AddAction(playbook.Action{
+	b := newBuilder("mypb")
+	b.AddAction(playbook.Action{
 		Type:   "file.upload",
 		Params: map[string]any{"source": src, "destination": "/etc/service.conf"},
 	})
 
-	pkg, err := packager.New(workDir).Package(pb)
+	pkg, err := packager.New(workDir).Package(b.Playbook())
 	if err != nil {
 		t.Fatalf("Package: %v", err)
 	}
@@ -460,13 +461,13 @@ func TestPackage_ManifestIncludesUploadFiles(t *testing.T) {
 
 func TestPackage_MissingSourceReturnsError(t *testing.T) {
 	workDir := t.TempDir()
-	pb := newPlaybook("mypb")
-	pb.AddAction(playbook.Action{
+	b := newBuilder("mypb")
+	b.AddAction(playbook.Action{
 		Type:   "file.upload",
 		Params: map[string]any{"source": "/nonexistent/file.conf", "destination": "/etc/file.conf"},
 	})
 
-	_, err := packager.New(workDir).Package(pb)
+	_, err := packager.New(workDir).Package(b.Playbook())
 	if err == nil {
 		t.Fatal("expected error for missing source file")
 	}
@@ -474,13 +475,13 @@ func TestPackage_MissingSourceReturnsError(t *testing.T) {
 
 func TestPackage_Idempotent(t *testing.T) {
 	workDir := t.TempDir()
-	pb := newPlaybook("mypb")
+	b := newBuilder("mypb")
 	p := packager.New(workDir)
 
-	if _, err := p.Package(pb); err != nil {
+	if _, err := p.Package(b.Playbook()); err != nil {
 		t.Fatalf("first Package: %v", err)
 	}
-	if _, err := p.Package(pb); err != nil {
+	if _, err := p.Package(b.Playbook()); err != nil {
 		t.Fatalf("second Package: %v", err)
 	}
 }

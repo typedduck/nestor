@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/typedduck/nestor/agent/executor"
+	"github.com/typedduck/nestor/playbook"
 )
 
 // stubHandler is a configurable test handler.
@@ -12,18 +13,20 @@ type stubHandler struct {
 	result executor.ActionResult
 }
 
-func (h *stubHandler) Execute(action executor.Action, ctx *executor.ExecutionContext) executor.ActionResult {
+func (h *stubHandler) Execute(action playbook.Action, ctx *executor.ExecutionContext) executor.ActionResult {
 	return h.result
 }
 
-func testPlaybook(actions ...executor.Action) *executor.Playbook {
+func testPlaybook(actions ...playbook.Action) *executor.Playbook {
 	return &executor.Playbook{
-		Name:        "test-playbook",
-		Version:     "1.0",
-		Created:     time.Now(),
-		Controller:  "test",
-		Environment: map[string]string{"ENV": "test"},
-		Actions:     actions,
+		Playbook: playbook.Playbook{
+			Name:        "test-playbook",
+			Version:     "1.0",
+			Created:     time.Now(),
+			Controller:  "test",
+			Environment: map[string]string{"ENV": "test"},
+			Actions:     actions,
+		},
 		ExtractPath: "/tmp/test",
 	}
 }
@@ -61,7 +64,7 @@ func TestEngine_ExecuteSuccess(t *testing.T) {
 	fs := executor.NewMockFileSystem()
 	cmd := executor.NewMockCommandRunner()
 	pb := testPlaybook(
-		executor.Action{ID: "a1", Type: "test.action", Params: map[string]any{}},
+		playbook.Action{ID: "a1", Type: "test.action", Params: map[string]any{}},
 	)
 	engine := testEngine(pb, fs, cmd)
 	engine.RegisterHandler("test.action", &stubHandler{
@@ -87,8 +90,8 @@ func TestEngine_ExecuteStopsOnFailure(t *testing.T) {
 	fs := executor.NewMockFileSystem()
 	cmd := executor.NewMockCommandRunner()
 	pb := testPlaybook(
-		executor.Action{ID: "a1", Type: "fail.action", Params: map[string]any{}},
-		executor.Action{ID: "a2", Type: "test.action", Params: map[string]any{}},
+		playbook.Action{ID: "a1", Type: "fail.action", Params: map[string]any{}},
+		playbook.Action{ID: "a2", Type: "test.action", Params: map[string]any{}},
 	)
 	engine := testEngine(pb, fs, cmd)
 	engine.RegisterHandler("fail.action", &stubHandler{
@@ -117,7 +120,7 @@ func TestEngine_UnknownActionType(t *testing.T) {
 	fs := executor.NewMockFileSystem()
 	cmd := executor.NewMockCommandRunner()
 	pb := testPlaybook(
-		executor.Action{ID: "a1", Type: "no.handler", Params: map[string]any{}},
+		playbook.Action{ID: "a1", Type: "no.handler", Params: map[string]any{}},
 	)
 	engine := testEngine(pb, fs, cmd)
 
@@ -137,12 +140,12 @@ func TestEngine_ContextHasFSAndCmd(t *testing.T) {
 	fs := executor.NewMockFileSystem()
 	cmd := executor.NewMockCommandRunner()
 	pb := testPlaybook(
-		executor.Action{ID: "a1", Type: "check.context", Params: map[string]any{}},
+		playbook.Action{ID: "a1", Type: "check.context", Params: map[string]any{}},
 	)
 	engine := testEngine(pb, fs, cmd)
 
 	var capturedCtx *executor.ExecutionContext
-	engine.RegisterHandler("check.context", handlerFunc(func(action executor.Action, ctx *executor.ExecutionContext) executor.ActionResult {
+	engine.RegisterHandler("check.context", handlerFunc(func(action playbook.Action, ctx *executor.ExecutionContext) executor.ActionResult {
 		capturedCtx = ctx
 		return executor.ActionResult{Status: "success", Message: "ok"}
 	}))
@@ -169,13 +172,13 @@ func TestEngine_DryRun(t *testing.T) {
 	fs := executor.NewMockFileSystem()
 	cmd := executor.NewMockCommandRunner()
 	pb := testPlaybook(
-		executor.Action{ID: "a1", Type: "check.dryrun", Params: map[string]any{}},
+		playbook.Action{ID: "a1", Type: "check.dryrun", Params: map[string]any{}},
 	)
 	engine := testEngine(pb, fs, cmd)
 	engine.SetDryRun(true)
 
 	var dryRun bool
-	engine.RegisterHandler("check.dryrun", handlerFunc(func(action executor.Action, ctx *executor.ExecutionContext) executor.ActionResult {
+	engine.RegisterHandler("check.dryrun", handlerFunc(func(action playbook.Action, ctx *executor.ExecutionContext) executor.ActionResult {
 		dryRun = ctx.DryRun
 		return executor.ActionResult{Status: "success", Message: "ok"}
 	}))
@@ -190,7 +193,7 @@ func TestEngine_SavesState(t *testing.T) {
 	fs := executor.NewMockFileSystem()
 	cmd := executor.NewMockCommandRunner()
 	pb := testPlaybook(
-		executor.Action{ID: "a1", Type: "test.action", Params: map[string]any{}},
+		playbook.Action{ID: "a1", Type: "test.action", Params: map[string]any{}},
 	)
 	engine := executor.New(pb, &executor.Info{}, "/tmp/test.state", fs, cmd)
 	engine.RegisterHandler("test.action", &stubHandler{
@@ -240,9 +243,9 @@ func TestEngine_MultipleActions(t *testing.T) {
 	fs := executor.NewMockFileSystem()
 	cmd := executor.NewMockCommandRunner()
 	pb := testPlaybook(
-		executor.Action{ID: "a1", Type: "test.action", Params: map[string]any{}},
-		executor.Action{ID: "a2", Type: "test.action", Params: map[string]any{}},
-		executor.Action{ID: "a3", Type: "test.action", Params: map[string]any{}},
+		playbook.Action{ID: "a1", Type: "test.action", Params: map[string]any{}},
+		playbook.Action{ID: "a2", Type: "test.action", Params: map[string]any{}},
+		playbook.Action{ID: "a3", Type: "test.action", Params: map[string]any{}},
 	)
 	engine := testEngine(pb, fs, cmd)
 	engine.RegisterHandler("test.action", &stubHandler{
@@ -269,8 +272,8 @@ func TestEngine_MultipleActions(t *testing.T) {
 }
 
 // handlerFunc adapts a function to the Handler interface.
-type handlerFunc func(executor.Action, *executor.ExecutionContext) executor.ActionResult
+type handlerFunc func(playbook.Action, *executor.ExecutionContext) executor.ActionResult
 
-func (f handlerFunc) Execute(action executor.Action, ctx *executor.ExecutionContext) executor.ActionResult {
+func (f handlerFunc) Execute(action playbook.Action, ctx *executor.ExecutionContext) executor.ActionResult {
 	return f(action, ctx)
 }

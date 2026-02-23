@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/typedduck/nestor/agent/executor"
+	"github.com/typedduck/nestor/playbook"
 )
 
 // PackageRemoveHandler handles package removal
@@ -13,7 +14,7 @@ func NewPackageRemoveHandler() *PackageRemoveHandler {
 	return &PackageRemoveHandler{}
 }
 
-func (h *PackageRemoveHandler) Execute(action executor.Action, context *executor.ExecutionContext) executor.ActionResult {
+func (h *PackageRemoveHandler) Execute(action playbook.Action, context *executor.ExecutionContext) executor.ActionResult {
 	// TODO: Implement package removal
 	return executor.ActionResult{
 		Status:  "success",
@@ -29,7 +30,7 @@ func NewPackageUpdateHandler() *PackageUpdateHandler {
 	return &PackageUpdateHandler{}
 }
 
-func (h *PackageUpdateHandler) Execute(action executor.Action, context *executor.ExecutionContext) executor.ActionResult {
+func (h *PackageUpdateHandler) Execute(action playbook.Action, context *executor.ExecutionContext) executor.ActionResult {
 	// TODO: Implement package cache update
 	pm := context.SystemInfo.PackageManager
 
@@ -55,7 +56,7 @@ func NewPackageUpgradeHandler() *PackageUpgradeHandler {
 	return &PackageUpgradeHandler{}
 }
 
-func (h *PackageUpgradeHandler) Execute(action executor.Action, context *executor.ExecutionContext) executor.ActionResult {
+func (h *PackageUpgradeHandler) Execute(action playbook.Action, context *executor.ExecutionContext) executor.ActionResult {
 	// TODO: Implement package upgrade
 	return executor.ActionResult{
 		Status:  "success",
@@ -71,7 +72,7 @@ func NewFileTemplateHandler() *FileTemplateHandler {
 	return &FileTemplateHandler{}
 }
 
-func (h *FileTemplateHandler) Execute(action executor.Action, context *executor.ExecutionContext) executor.ActionResult {
+func (h *FileTemplateHandler) Execute(action playbook.Action, context *executor.ExecutionContext) executor.ActionResult {
 	// TODO: Implement template rendering
 	destination := getStringParam(action.Params, "destination", "")
 	source := getStringParam(action.Params, "source", "")
@@ -90,7 +91,7 @@ func NewFileUploadHandler() *FileUploadHandler {
 	return &FileUploadHandler{}
 }
 
-func (h *FileUploadHandler) Execute(action executor.Action, context *executor.ExecutionContext) executor.ActionResult {
+func (h *FileUploadHandler) Execute(action playbook.Action, context *executor.ExecutionContext) executor.ActionResult {
 	// TODO: Implement file upload
 	destination := getStringParam(action.Params, "destination", "")
 	source := getStringParam(action.Params, "source", "")
@@ -109,7 +110,7 @@ func NewSymlinkHandler() *SymlinkHandler {
 	return &SymlinkHandler{}
 }
 
-func (h *SymlinkHandler) Execute(action executor.Action, context *executor.ExecutionContext) executor.ActionResult {
+func (h *SymlinkHandler) Execute(action playbook.Action, context *executor.ExecutionContext) executor.ActionResult {
 	// TODO: Implement symlink creation
 	destination := getStringParam(action.Params, "destination", "")
 	source := getStringParam(action.Params, "source", "")
@@ -128,7 +129,7 @@ func NewFileRemoveHandler() *FileRemoveHandler {
 	return &FileRemoveHandler{}
 }
 
-func (h *FileRemoveHandler) Execute(action executor.Action, context *executor.ExecutionContext) executor.ActionResult {
+func (h *FileRemoveHandler) Execute(action playbook.Action, context *executor.ExecutionContext) executor.ActionResult {
 	// TODO: Implement file removal
 	path := getStringParam(action.Params, "path", "")
 

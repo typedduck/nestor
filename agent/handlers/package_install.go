@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/typedduck/nestor/agent/executor"
+	"github.com/typedduck/nestor/playbook"
 )
 
 // PackageInstallHandler handles package installation
@@ -16,7 +17,7 @@ func NewPackageInstallHandler() *PackageInstallHandler {
 }
 
 // Execute installs packages using the system package manager
-func (h *PackageInstallHandler) Execute(action executor.Action,
+func (h *PackageInstallHandler) Execute(action playbook.Action,
 	context *executor.ExecutionContext) executor.ActionResult {
 	// Extract parameters
 	packagesInterface, ok := action.Params["packages"]

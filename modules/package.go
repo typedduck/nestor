@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/typedduck/nestor/playbook"
+	"github.com/typedduck/nestor/playbook/builder"
 )
 
 // Package adds package management actions to the playbook.
@@ -20,27 +21,27 @@ import (
 //
 // Examples:
 //
-//	modules.Package(pb, "install", "vim", "git", "htop")
-//	modules.Package(pb, "remove", "apache2")
-//	modules.Package(pb, "update")
-//	modules.Package(pb, "upgrade")
-func Package(pb *playbook.Playbook, operation string, packages ...string) error {
+//	modules.Package(b, "install", "vim", "git", "htop")
+//	modules.Package(b, "remove", "apache2")
+//	modules.Package(b, "update")
+//	modules.Package(b, "upgrade")
+func Package(b *builder.Builder, operation string, packages ...string) error {
 	switch operation {
 	case "install":
-		return packageInstall(pb, packages)
+		return packageInstall(b, packages)
 	case "remove":
-		return packageRemove(pb, packages)
+		return packageRemove(b, packages)
 	case "update":
-		return packageUpdate(pb)
+		return packageUpdate(b)
 	case "upgrade":
-		return packageUpgrade(pb)
+		return packageUpgrade(b)
 	default:
 		return fmt.Errorf("unknown package operation: %s (valid: install, remove, update, upgrade)", operation)
 	}
 }
 
 // packageInstall adds an action to install one or more packages.
-func packageInstall(pb *playbook.Playbook, packages []string) error {
+func packageInstall(b *builder.Builder, packages []string) error {
 	if len(packages) == 0 {
 		return fmt.Errorf("no packages specified for install operation")
 	}
@@ -53,12 +54,12 @@ func packageInstall(pb *playbook.Playbook, packages []string) error {
 		},
 	}
 
-	pb.AddAction(action)
+	b.AddAction(action)
 	return nil
 }
 
 // packageRemove adds an action to remove one or more packages.
-func packageRemove(pb *playbook.Playbook, packages []string) error {
+func packageRemove(b *builder.Builder, packages []string) error {
 	if len(packages) == 0 {
 		return fmt.Errorf("no packages specified for remove operation")
 	}
@@ -70,31 +71,31 @@ func packageRemove(pb *playbook.Playbook, packages []string) error {
 		},
 	}
 
-	pb.AddAction(action)
+	b.AddAction(action)
 	return nil
 }
 
 // packageUpdate adds an action to update the package cache.
 // This is equivalent to 'apt update' or 'yum check-update'.
-func packageUpdate(pb *playbook.Playbook) error {
+func packageUpdate(b *builder.Builder) error {
 	action := playbook.Action{
 		Type:   "package.update",
 		Params: map[string]interface{}{},
 	}
 
-	pb.AddAction(action)
+	b.AddAction(action)
 	return nil
 }
 
 // packageUpgrade adds an action to upgrade all installed packages.
 // This is equivalent to 'apt upgrade' or 'yum update'.
-func packageUpgrade(pb *playbook.Playbook) error {
+func packageUpgrade(b *builder.Builder) error {
 	action := playbook.Action{
 		Type:   "package.upgrade",
 		Params: map[string]interface{}{},
 	}
 
-	pb.AddAction(action)
+	b.AddAction(action)
 	return nil
 }
 
@@ -115,8 +116,8 @@ type PackageOptions struct {
 //	    AllowDowngrade: false,
 //	    Force: false,
 //	}
-//	modules.PackageWithOptions(pb, "install", []string{"nginx"}, opts)
-func PackageWithOptions(pb *playbook.Playbook, operation string, packages []string, opts *PackageOptions) error {
+//	modules.PackageWithOptions(b, "install", []string{"nginx"}, opts)
+func PackageWithOptions(b *builder.Builder, operation string, packages []string, opts *PackageOptions) error {
 	if opts == nil {
 		opts = &PackageOptions{
 			UpdateCache:    true,
@@ -141,7 +142,7 @@ func PackageWithOptions(pb *playbook.Playbook, operation string, packages []stri
 			},
 		}
 
-		pb.AddAction(action)
+		b.AddAction(action)
 		return nil
 
 	case "remove":
@@ -157,7 +158,7 @@ func PackageWithOptions(pb *playbook.Playbook, operation string, packages []stri
 			},
 		}
 
-		pb.AddAction(action)
+		b.AddAction(action)
 		return nil
 
 	default:

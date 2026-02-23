@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/typedduck/nestor/playbook"
+	"github.com/typedduck/nestor/playbook/builder"
 )
 
 // FileOption is a functional option for configuring file operations.
@@ -34,11 +35,11 @@ type fileConfig struct {
 // Examples:
 //
 //	// Create file with inline content
-//	modules.File(pb, "/etc/motd",
+//	modules.File(b, "/etc/motd",
 //	    modules.Content("Welcome to the server\n"))
 //
 //	// Create file from template with variables
-//	modules.File(pb, "/etc/app/config.yml",
+//	modules.File(b, "/etc/app/config.yml",
 //	    modules.FromTemplate("config.yml.tmpl"),
 //	    modules.TemplateVars(map[string]string{
 //	        "DBHost": "db.example.com",
@@ -46,16 +47,16 @@ type fileConfig struct {
 //	    }))
 //
 //	// Upload local file
-//	modules.File(pb, "/usr/local/bin/myapp",
+//	modules.File(b, "/usr/local/bin/myapp",
 //	    modules.FromFile("./build/myapp"),
 //	    modules.Mode(0755))
 //
 //	// Set ownership and permissions
-//	modules.File(pb, "/etc/app/secret.conf",
+//	modules.File(b, "/etc/app/secret.conf",
 //	    modules.Content("api_key=secret123"),
 //	    modules.Owner("appuser", "appgroup"),
 //	    modules.Mode(0600))
-func File(pb *playbook.Playbook, destination string, opts ...FileOption) error {
+func File(b *builder.Builder, destination string, opts ...FileOption) error {
 	cfg := &fileConfig{
 		mode: 0644, // default mode
 	}
@@ -120,7 +121,7 @@ func File(pb *playbook.Playbook, destination string, opts ...FileOption) error {
 		action.Params["mode"] = fmt.Sprintf("0%o", cfg.mode)
 	}
 
-	pb.AddAction(action)
+	b.AddAction(action)
 	return nil
 }
 
@@ -184,17 +185,17 @@ func Mode(mode uint32) FileOption {
 // Examples:
 //
 //	// Create simple directory
-//	modules.Directory(pb, "/var/app/data")
+//	modules.Directory(b, "/var/app/data")
 //
 //	// Create directory with ownership and permissions
-//	modules.Directory(pb, "/var/app/data",
+//	modules.Directory(b, "/var/app/data",
 //	    modules.Owner("appuser", "appgroup"),
 //	    modules.Mode(0750))
 //
 //	// Create directory recursively (like mkdir -p)
-//	modules.Directory(pb, "/var/app/data/logs",
+//	modules.Directory(b, "/var/app/data/logs",
 //	    modules.Recursive(true))
-func Directory(pb *playbook.Playbook, path string, opts ...FileOption) error {
+func Directory(b *builder.Builder, path string, opts ...FileOption) error {
 	cfg := &fileConfig{
 		mode:      0755, // default directory mode
 		recursive: false,
@@ -221,7 +222,7 @@ func Directory(pb *playbook.Playbook, path string, opts ...FileOption) error {
 		action.Params["group"] = cfg.group
 	}
 
-	pb.AddAction(action)
+	b.AddAction(action)
 	return nil
 }
 
@@ -242,10 +243,10 @@ func Recursive(recursive bool) FileOption {
 // Example:
 //
 //	// Enable nginx site by creating symlink
-//	modules.Symlink(pb,
+//	modules.Symlink(b,
 //	    "/etc/nginx/sites-enabled/myapp",
 //	    "/etc/nginx/sites-available/myapp")
-func Symlink(pb *playbook.Playbook, destination, target string) error {
+func Symlink(b *builder.Builder, destination, target string) error {
 	action := playbook.Action{
 		Type: "file.symlink",
 		Params: map[string]interface{}{
@@ -254,7 +255,7 @@ func Symlink(pb *playbook.Playbook, destination, target string) error {
 		},
 	}
 
-	pb.AddAction(action)
+	b.AddAction(action)
 	return nil
 }
 
@@ -263,12 +264,12 @@ func Symlink(pb *playbook.Playbook, destination, target string) error {
 // Examples:
 //
 //	// Remove a file
-//	modules.Remove(pb, "/tmp/old-config.conf")
+//	modules.Remove(b, "/tmp/old-config.conf")
 //
 //	// Remove a directory recursively
-//	modules.Remove(pb, "/var/app/old-version",
+//	modules.Remove(b, "/var/app/old-version",
 //	    modules.Recursive(true))
-func Remove(pb *playbook.Playbook, path string, opts ...FileOption) error {
+func Remove(b *builder.Builder, path string, opts ...FileOption) error {
 	cfg := &fileConfig{
 		recursive: false,
 	}
@@ -286,6 +287,6 @@ func Remove(pb *playbook.Playbook, path string, opts ...FileOption) error {
 		},
 	}
 
-	pb.AddAction(action)
+	b.AddAction(action)
 	return nil
 }
