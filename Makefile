@@ -24,7 +24,7 @@ help:
 	@echo "Available targets:"
 	@echo "  build             - Build both controller and agent"
 	@echo "  build-controller  - Build controller binary"
-	@echo "  build-agent       - Build agent binary"
+	@echo "  build-agent       - Build agent binary (native, linux-(amd64, arm64))"
 	@echo "  test              - Run unit tests"
 	@echo "  test-integration  - Run integration tests (requires Docker or Podman)"
 	@echo "  test-verbose      - Run tests with verbose output"

@@ -74,6 +74,11 @@ func (s *agentSuite) exec(ctx context.Context, cmd ...string) (int, string, erro
 	return exitCode, string(out), nil
 }
 
+// copyToContainer copies a file from the host into the container.
+func (s *agentSuite) copyToContainer(ctx context.Context, hostPath, containerPath string) error {
+	return s.container.CopyFileToContainer(ctx, hostPath, containerPath, 0644)
+}
+
 // teardown stops and removes the container.
 func (s *agentSuite) teardown(ctx context.Context) {
 	_ = s.container.Terminate(ctx)

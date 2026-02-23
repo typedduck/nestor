@@ -1,11 +1,16 @@
 package main
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/typedduck/nestor/agent/executor"
@@ -43,8 +48,12 @@ func main() {
 		log.Fatal("[FATAL] agent must be run as root (use sudo)")
 	}
 
+	// Derive the extraction path once so both loadPlaybook and the validator
+	// reference the same directory.
+	extractPath := "/tmp/nestor-playbook-" + fmt.Sprintf("%d", time.Now().Unix())
+
 	// Load and validate the playbook
-	playbook, err := loadPlaybook(config.PlaybookPath)
+	playbook, err := loadPlaybook(config.PlaybookPath, extractPath)
 	if err != nil {
 		log.Fatalf("[FATAL] failed to load playbook: %v", err)
 	}
@@ -58,7 +67,7 @@ func main() {
 	cmd := executor.OSCommandRunner{}
 
 	// Validate playbook integrity
-	val := validator.New(config.PlaybookPath, nil)
+	val := validator.New(config.PlaybookPath, extractPath, nil)
 	if err := val.ValidateSignature(); err != nil {
 		log.Fatalf("[FATAL] signature validation failed: %v", err)
 	}
@@ -130,21 +139,17 @@ func setupLogging(logFile string) error {
 	return nil
 }
 
-// loadPlaybook loads and unmarshals the playbook from the archive
-func loadPlaybook(path string) (*executor.Playbook, error) {
-	// Extract the playbook archive
-	extractPath := "/tmp/nestor-playbook-" + fmt.Sprintf("%d", time.Now().Unix())
+// loadPlaybook extracts the archive to extractPath and unmarshals playbook.json.
+func loadPlaybook(path, extractPath string) (*executor.Playbook, error) {
 	if err := extractArchive(path, extractPath); err != nil {
 		return nil, fmt.Errorf("failed to extract archive: %w", err)
 	}
 
-	// Read playbook.json
-	data, err := os.ReadFile(extractPath + "/playbook.json")
+	data, err := os.ReadFile(filepath.Join(extractPath, "playbook.json"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read playbook.json: %w", err)
 	}
 
-	// Unmarshal JSON
 	var playbook executor.Playbook
 	if err := json.Unmarshal(data, &playbook); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal playbook: %w", err)
@@ -155,18 +160,66 @@ func loadPlaybook(path string) (*executor.Playbook, error) {
 	return &playbook, nil
 }
 
-// extractArchive extracts a tar.gz archive to the specified path
+// extractArchive extracts a tar.gz archive into extractPath.
+// It guards against path-traversal attacks by rejecting any entry whose
+// resolved destination does not reside under extractPath.
 func extractArchive(archivePath, extractPath string) error {
-	if _, err := os.Stat(archivePath); err != nil {
+	f, err := os.Open(archivePath)
+	if err != nil {
 		return err
 	}
-	// Create extraction directory
+	defer f.Close()
+
 	if err := os.MkdirAll(extractPath, 0755); err != nil {
 		return err
 	}
 
-	// TODO: Implement tar.gz extraction
-	// For now, this is a placeholder
+	gr, err := gzip.NewReader(f)
+	if err != nil {
+		return fmt.Errorf("gzip: %w", err)
+	}
+	defer gr.Close()
+
+	tr := tar.NewReader(gr)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("tar: %w", err)
+		}
+
+		// Guard against path traversal.
+		target := filepath.Join(extractPath, hdr.Name)
+		if !strings.HasPrefix(target, extractPath+string(os.PathSeparator)) &&
+			target != extractPath {
+			return fmt.Errorf("tar entry %q escapes extraction directory", hdr.Name)
+		}
+
+		switch hdr.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(target, os.FileMode(hdr.Mode)); err != nil {
+				return err
+			}
+
+		case tar.TypeReg:
+			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+				return err
+			}
+			out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC,
+				os.FileMode(hdr.Mode))
+			if err != nil {
+				return err
+			}
+			if _, err := io.Copy(out, tr); err != nil {
+				out.Close()
+				return err
+			}
+			out.Close()
+		}
+	}
+
 	return nil
 }
 

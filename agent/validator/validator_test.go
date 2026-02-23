@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/typedduck/nestor/agent/executor"
 )
 
 func setupExtractDir(t *testing.T) string {
@@ -29,22 +31,25 @@ func sha256hex(data []byte) string {
 	return fmt.Sprintf("%x", h[:])
 }
 
-// newTestValidator creates a Validator pointing at a temp extract dir
-// using real OS file operations.
+// newTestValidator creates a Validator pointing at a temp dir for both the
+// (fake) archive path and the extract path, using real OS file operations.
+// The same dir is used for both so that sig files and extracted files can
+// coexist without separate setup.
 func newTestValidator(t *testing.T) (*Validator, string) {
 	t.Helper()
 	dir := setupExtractDir(t)
 	v := &Validator{
-		playbookPath: "/tmp/test-playbook.tar.gz",
+		playbookPath: filepath.Join(dir, "test-playbook.tar.gz"),
 		extractPath:  dir,
-		fs:           osFileOpener{},
+		fs:           executor.OSFileSystem{},
 	}
 	return v, dir
 }
 
 func TestValidateSignature_Success(t *testing.T) {
 	v, dir := newTestValidator(t)
-	writeFile(t, filepath.Join(dir, "signature"), []byte("fake-sig"))
+	// Sig file must be beside the archive: <dir>/test-playbook.sig
+	writeFile(t, filepath.Join(dir, "test-playbook.sig"), []byte("fake-sig"))
 
 	if err := v.ValidateSignature(); err != nil {
 		t.Fatalf("expected no error, got: %v", err)
@@ -155,7 +160,7 @@ func TestValidateManifest_SkipsEmptyLines(t *testing.T) {
 }
 
 func TestNew_NilFSUsesDefault(t *testing.T) {
-	v := New("/tmp/test.tar.gz", nil)
+	v := New("/tmp/test.tar.gz", "/tmp/extract", nil)
 	if v.fs == nil {
 		t.Fatal("expected non-nil fs with nil input")
 	}

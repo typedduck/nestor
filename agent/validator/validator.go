@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/typedduck/nestor/agent/executor"
 )
 
 // FileOpener abstracts file system operations for testability.
@@ -24,14 +26,10 @@ type Validator struct {
 }
 
 // New creates a new validator. If fs is nil, real OS operations are used.
-func New(playbookPath string, fs FileOpener) *Validator {
+func New(playbookPath, extractPath string, fs FileOpener) *Validator {
 	if fs == nil {
-		fs = osFileOpener{}
+		fs = executor.OSFileSystem{}
 	}
-
-	// Assume playbook is extracted to a temporary directory
-	// In reality, this would be the actual extraction path
-	extractPath := "/tmp/nestor-playbook-" + filepath.Base(playbookPath)
 
 	return &Validator{
 		playbookPath: playbookPath,
@@ -40,21 +38,19 @@ func New(playbookPath string, fs FileOpener) *Validator {
 	}
 }
 
-// ValidateSignature validates the playbook signature
+// ValidateSignature validates the playbook signature.
+// It expects a .sig file beside the archive (sibling file, same directory).
 func (v *Validator) ValidateSignature() error {
-	// TODO: Implement actual signature validation
-	// This would:
-	// 1. Read the signature file
-	// 2. Read the controller's public key from authorized_keys
-	// 3. Verify the signature against the playbook archive
-	// 4. Return error if validation fails
+	base := filepath.Base(v.playbookPath)
+	name := strings.TrimSuffix(base, filepath.Ext(base)) // strip .gz
+	name = strings.TrimSuffix(name, filepath.Ext(name))  // strip .tar
+	sigPath := filepath.Join(filepath.Dir(v.playbookPath), name+".sig")
 
-	signaturePath := filepath.Join(v.extractPath, "signature")
-	if _, err := v.fs.Stat(signaturePath); err != nil {
+	if _, err := v.fs.Stat(sigPath); err != nil {
 		return fmt.Errorf("signature file not found: %w", err)
 	}
 
-	// Placeholder: assume signature is valid
+	// TODO: verify cryptographic signature
 	return nil
 }
 
@@ -127,9 +123,3 @@ func (v *Validator) computeChecksum(relPath string) (string, error) {
 
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
-
-// osFileOpener is the default FileOpener using the real OS.
-type osFileOpener struct{}
-
-func (osFileOpener) Stat(path string) (os.FileInfo, error)  { return os.Stat(path) }
-func (osFileOpener) Open(path string) (*os.File, error)     { return os.Open(path) }
