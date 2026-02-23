@@ -48,7 +48,7 @@ func packageInstall(b *builder.Builder, packages []string) error {
 
 	action := playbook.Action{
 		Type: "package.install",
-		Params: map[string]interface{}{
+		Params: map[string]any{
 			"packages":     packages,
 			"update_cache": true,
 		},
@@ -66,7 +66,7 @@ func packageRemove(b *builder.Builder, packages []string) error {
 
 	action := playbook.Action{
 		Type: "package.remove",
-		Params: map[string]interface{}{
+		Params: map[string]any{
 			"packages": packages,
 		},
 	}
@@ -80,7 +80,7 @@ func packageRemove(b *builder.Builder, packages []string) error {
 func packageUpdate(b *builder.Builder) error {
 	action := playbook.Action{
 		Type:   "package.update",
-		Params: map[string]interface{}{},
+		Params: map[string]any{},
 	}
 
 	b.AddAction(action)
@@ -92,7 +92,7 @@ func packageUpdate(b *builder.Builder) error {
 func packageUpgrade(b *builder.Builder) error {
 	action := playbook.Action{
 		Type:   "package.upgrade",
-		Params: map[string]interface{}{},
+		Params: map[string]any{},
 	}
 
 	b.AddAction(action)
@@ -134,7 +134,7 @@ func PackageWithOptions(b *builder.Builder, operation string, packages []string,
 
 		action := playbook.Action{
 			Type: "package.install",
-			Params: map[string]interface{}{
+			Params: map[string]any{
 				"packages":        packages,
 				"update_cache":    opts.UpdateCache,
 				"allow_downgrade": opts.AllowDowngrade,
@@ -152,7 +152,7 @@ func PackageWithOptions(b *builder.Builder, operation string, packages []string,
 
 		action := playbook.Action{
 			Type: "package.remove",
-			Params: map[string]interface{}{
+			Params: map[string]any{
 				"packages": packages,
 				"force":    opts.Force,
 			},
