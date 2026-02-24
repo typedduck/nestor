@@ -36,6 +36,12 @@ nestor is ideal for:
 - Disaster recovery and system restoration
 - Environments where SSH is already the primary access method
 
+## The Name
+
+nestor takes its name from King Nestor of Pylos, a figure from Homer's Iliad. Among the Greek leaders at Troy, Nestor stood apart not as the strongest warrior, but as the wisest counselor. He understood that most battles are won not through overwhelming force, but through sound judgment, clear coordination, and knowing which fights are worth having.
+
+This tool aspires to the same pragmatism. It won't cover every edge case in your infrastructure, and it doesn't try to. It covers the 80% -- sensibly, reliably, and without making you learn a new paradigm to get there.
+
 ## Architecture
 
 nestor consists of three main components:
@@ -114,24 +120,24 @@ Actions are the atomic execution units implemented in the agent. They:
        │ scp playbook.tar.gz
        │ ssh sudo ./nestor-agent
        ▼
-┌───────────────────┐
-│ Remote Host       │
-│                   │
-│  ┌─────────────┐  │
-│  │ Agent       │  │
-│  │             │  │
-│  │ 1. Verify   │  |
-│  │    signature|  |
-│  │             │  │
-│  │ 2. Validate |  |
-│  │    manifest │  |
-│  │             │  │
-│  │ 3. Execute  |  |
-│  │    actions  │  |
-│  │             │  │
-│  │ 4. Report   │  |
-│  └─────────────┘  │
-└───────────────────┘
+┌────────────────────┐
+│ Remote Host        │
+│                    │
+│  ┌──────────────┐  │
+│  │ Agent        │  │
+│  │              │  │
+│  │ 1. Verify    │  |
+│  │    signature |  |
+│  │              │  │
+│  │ 2. Validate  |  |
+│  │    manifest  │  |
+│  │              │  │
+│  │ 3. Execute   |  |
+│  │    actions   │  |
+│  │              │  │
+│  │ 4. Report    │  |
+│  └──────────────┘  │
+└────────────────────┘
 ```
 
 ## Module API Design
@@ -144,7 +150,7 @@ Modules in nestor use a fluent, builder-style API to construct provisioning work
 package main
 
 import (
-		"github.com/yourusername/nestor/executor"
+    "github.com/yourusername/nestor/executor"
     "github.com/yourusername/nestor/modules"
     "github.com/yourusername/nestor/playbook"
 )
@@ -290,7 +296,7 @@ modules.Group(pb, "appgroup",
 package main
 
 import (
-		"github.com/yourusername/nestor/executor"
+    "github.com/yourusername/nestor/executor"
     "github.com/yourusername/nestor/modules"
     "github.com/yourusername/nestor/playbook"
 )
@@ -356,7 +362,7 @@ func main() {
     
     DeployWebApp(pb, "v1.2.3")
     
-    err := executor.Execute(pb, "deploy@app-server-01.example.com", &executor.Config{})
+    err := executor.Deploy(pb, "deploy@app-server-01.example.com", &executor.Config{})
     if err != nil {
         panic(err)
     }
@@ -401,114 +407,7 @@ playbook.tar.gz
         "gid": 2000
       }
     },
-    {
-      "id": "action-002",
-      "type": "user.create",
-      "params": {
-        "name": "webapp",
-        "uid": 2000,
-        "group": "webapp",
-        "home": "/opt/webapp",
-        "shell": "/bin/false"
-      }
-    },
-    {
-      "id": "action-003",
-      "type": "directory.create",
-      "params": {
-        "path": "/opt/webapp",
-        "owner": "webapp",
-        "group": "webapp",
-        "mode": "0755",
-        "recursive": true
-      }
-    },
-    {
-      "id": "action-004",
-      "type": "package.install",
-      "params": {
-        "packages": ["nginx", "postgresql-client", "redis-tools"],
-        "update_cache": true
-      }
-    },
-    {
-      "id": "action-005",
-      "type": "file.upload",
-      "params": {
-        "source": "upload/webapp-v1.2.3",
-        "destination": "/opt/webapp/webapp",
-        "owner": "webapp",
-        "group": "webapp",
-        "mode": "0755"
-      }
-    },
-    {
-      "id": "action-006",
-      "type": "file.template",
-      "params": {
-        "source": "upload/config.toml.tmpl",
-        "destination": "/opt/webapp/config.toml",
-        "variables": {
-          "Version": "v1.2.3",
-          "DataDir": "/opt/webapp/data"
-        },
-        "owner": "webapp",
-        "group": "webapp",
-        "mode": "0640"
-      }
-    },
-    {
-      "id": "action-007",
-      "type": "file.upload",
-      "params": {
-        "source": "upload/webapp.service.tmpl",
-        "destination": "/etc/systemd/system/webapp.service",
-        "owner": "root",
-        "group": "root",
-        "mode": "0644"
-      }
-    },
-    {
-      "id": "action-008",
-      "type": "command.execute",
-      "params": {
-        "command": "systemctl daemon-reload"
-      }
-    },
-    {
-      "id": "action-009",
-      "type": "file.template",
-      "params": {
-        "source": "upload/nginx-webapp.conf.tmpl",
-        "destination": "/etc/nginx/sites-available/webapp",
-        "owner": "root",
-        "group": "root",
-        "mode": "0644"
-      }
-    },
-    {
-      "id": "action-010",
-      "type": "file.symlink",
-      "params": {
-        "source": "/etc/nginx/sites-available/webapp",
-        "destination": "/etc/nginx/sites-enabled/webapp"
-      }
-    },
-    {
-      "id": "action-011",
-      "type": "service.reload",
-      "params": {
-        "name": "nginx"
-      }
-    },
-    {
-      "id": "action-012",
-      "type": "service.start",
-      "params": {
-        "name": "webapp",
-        "enabled": true
-      }
-    }
+    ...
   ]
 }
 ```
@@ -705,7 +604,7 @@ The controller will:
 - Transfer it to the remote host
 - Execute the agent via SSH
 - Display execution progress and results
-
+    
 ### Reconnecting to a Detached Agent
 
 If the SSH connection drops during execution, the agent continues running:
