@@ -256,6 +256,8 @@ type MockCommandRunner struct {
 	mu        sync.Mutex
 	calls     []MockCommandCall
 	responses map[string]MockCommandResponse
+	sequences map[string][]MockCommandResponse // per-call ordered responses
+	seqIdx    map[string]int
 	lookPaths map[string]string // name -> path, missing = error
 }
 
@@ -264,6 +266,8 @@ type MockCommandRunner struct {
 func NewMockCommandRunner() *MockCommandRunner {
 	return &MockCommandRunner{
 		responses: make(map[string]MockCommandResponse),
+		sequences: make(map[string][]MockCommandResponse),
+		seqIdx:    make(map[string]int),
 		lookPaths: make(map[string]string),
 	}
 }
@@ -273,6 +277,34 @@ func (m *MockCommandRunner) SetResponse(name string, resp MockCommandResponse) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.responses[name] = resp
+}
+
+// SetResponses configures an ordered sequence of responses for a command name. Each invocation
+// consumes the next response; once exhausted the last response repeats. Sequences take precedence
+// over a single SetResponse for the same name.
+func (m *MockCommandRunner) SetResponses(name string, resps ...MockCommandResponse) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.sequences[name] = resps
+	m.seqIdx[name] = 0
+}
+
+// pickResponse returns the response to use for the next call to name (must be called with lock
+// held).
+func (m *MockCommandRunner) pickResponse(name string) (MockCommandResponse, bool) {
+	if seq, ok := m.sequences[name]; ok && len(seq) > 0 {
+		idx := m.seqIdx[name]
+		if idx >= len(seq) {
+			idx = len(seq) - 1
+		}
+		resp := seq[idx]
+		if m.seqIdx[name] < len(seq)-1 {
+			m.seqIdx[name]++
+		}
+		return resp, true
+	}
+	resp, ok := m.responses[name]
+	return resp, ok
 }
 
 // SetLookPath makes LookPath succeed for the given command name.
@@ -299,7 +331,7 @@ func (m *MockCommandRunner) Run(name string, opts *CommandOpts, args ...string) 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.record(name, opts, args)
-	resp, ok := m.responses[name]
+	resp, ok := m.pickResponse(name)
 	if !ok {
 		return fmt.Errorf("command not found: %s", name)
 	}
@@ -316,7 +348,7 @@ func (m *MockCommandRunner) CombinedOutput(name string, opts *CommandOpts, args 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.record(name, opts, args)
-	resp, ok := m.responses[name]
+	resp, ok := m.pickResponse(name)
 	if !ok {
 		return nil, -1, fmt.Errorf("command not found: %s", name)
 	}

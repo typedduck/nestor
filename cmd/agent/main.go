@@ -243,11 +243,11 @@ func registerHandlers(engine *executor.Engine) {
 	// File removal handlers
 	engine.RegisterHandler("file.remove", handlers.NewFileRemoveHandler())
 
-	// Service handlers (to be implemented)
-	// engine.RegisterHandler("service.start", handlers.NewServiceStartHandler())
-	// engine.RegisterHandler("service.stop", handlers.NewServiceStopHandler())
-	// engine.RegisterHandler("service.reload", handlers.NewServiceReloadHandler())
-	// engine.RegisterHandler("service.restart", handlers.NewServiceRestartHandler())
+	// Service handlers
+	engine.RegisterHandler("service.start", handlers.NewServiceStartHandler())
+	engine.RegisterHandler("service.stop", handlers.NewServiceStopHandler())
+	engine.RegisterHandler("service.reload", handlers.NewServiceReloadHandler())
+	engine.RegisterHandler("service.restart", handlers.NewServiceRestartHandler())
 
 	// Command handlers (to be implemented)
 	// engine.RegisterHandler("command.execute", handlers.NewCommandExecuteHandler())
