@@ -15,6 +15,7 @@ nestor follows a controller-agent architecture where the controller runs on your
 - **Resilient execution** - Agent detaches on connection loss and allows controller reconnection to resume or retrieve results
 - **Idempotent actions** - Built-in actions are designed to be safely re-runnable
 - **Signed playbooks** - Cryptographic verification of playbook integrity and authenticity
+- **YAML playbooks** - Write and run playbooks without writing Go code using the `nestor apply` command
 - **Simple deployment** - Bootstrap remote systems with a single init command
 - **Cross-platform** - Runs on Linux, macOS, and other Unix-like systems
 - **80% solution** - Covers most common provisioning needs without the complexity of enterprise tools
@@ -362,6 +363,136 @@ func main() {
 }
 ```
 
+## YAML Playbooks
+
+In addition to the programmatic Go API, nestor supports a declarative YAML format. YAML playbooks are ideal for operations engineers who want to write and run provisioning tasks without a Go toolchain.
+
+### Format Overview
+
+```yaml
+name: webserver-setup
+
+environment:
+  ENVIRONMENT: production
+
+vars:
+  app_port: "8080"
+  db_host: db.example.com
+
+actions:
+  - package: update           # short form (update/upgrade)
+  - package: upgrade
+  - package:
+      install: [nginx, vim]
+  - package:
+      remove: [apache2]
+
+  - file:
+      path: /etc/motd
+      content: "Welcome\n"
+      mode: "0644"
+      owner: root
+      group: root
+
+  - file:
+      path: /opt/app/config.toml
+      template: config.toml.tmpl
+      vars:
+        DBHost: "${db_host}"
+        Port: "${app_port}"
+      owner: webapp
+      mode: "0640"
+
+  - file:
+      path: /opt/app/bin/app
+      upload: ./build/app
+      mode: "0755"
+
+  - directory:
+      path: /opt/app
+      owner: webapp
+      group: webapp
+      mode: "0755"
+      recursive: true
+
+  - symlink:
+      dest: /etc/nginx/sites-enabled/app
+      target: /etc/nginx/sites-available/app
+
+  - remove:
+      path: /opt/app-old
+      recursive: true
+
+  - command: echo hello        # short form
+  - command:
+      run: useradd -m deploy
+      creates: /home/deploy
+      env: [KEY=value]
+      chdir: /tmp
+
+  - script:
+      source: scripts/setup.sh
+      args: [--verbose]
+      creates: /etc/setup.done
+
+  - service:
+      name: nginx
+      action: start
+```
+
+### Variable Substitution
+
+Variables defined in the `vars:` section are substituted using `${var_name}` syntax before the YAML is parsed, so they can appear in any string value:
+
+```yaml
+vars:
+  domain: example.com
+  port: "443"
+
+actions:
+  - file:
+      path: /etc/nginx/conf.d/app.conf
+      template: nginx.conf.tmpl
+      vars:
+        Domain: "${domain}"
+        Port: "${port}"
+```
+
+Variables passed via `--var` flags on the command line override values from `vars:`.
+
+> **Note:** Quote mode strings (`"0755"`, `"0644"`) to prevent YAML from interpreting them as decimal numbers.
+
+### `nestor apply` Command
+
+```
+nestor apply [options] <playbook.yaml> user@host
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `-var key=value` | — | Set a playbook variable; may be repeated |
+| `-ssh-key path` | `~/.ssh/id_ed25519` | SSH private key for authentication |
+| `-signing-key path` | same as `-ssh-key` | Key used to sign the playbook |
+| `-known-hosts path` | `~/.ssh/known_hosts` | SSH known_hosts file |
+| `-dry-run` | false | Package and sign without deploying |
+
+**Examples:**
+
+```bash
+# Apply a playbook
+nestor apply webserver.yaml deploy@app01.example.com
+
+# Override a variable at runtime
+nestor apply webserver.yaml deploy@app01.example.com \
+  -var app_port=9090 \
+  -var db_host=db2.example.com
+
+# Package and sign only (no SSH connection)
+nestor apply --dry-run webserver.yaml deploy@app01.example.com
+```
+
+A complete example playbook is available at [`examples/yaml/webserver.yaml`](examples/yaml/webserver.yaml).
+
 ## Playbook Structure
 
 When modules assemble actions, they create a playbook archive with the following structure:
@@ -534,6 +665,25 @@ This command:
 
 2. **Create a simple playbook:**
 
+Using YAML (no Go toolchain required):
+
+```yaml
+# hello.yaml
+name: hello-world
+
+actions:
+  - package:
+      install: [vim, git, htop]
+  - file:
+      path: /etc/motd
+      content: "Welcome to nestor-managed system\n"
+  - service:
+      name: ssh
+      action: start
+```
+
+Or using the Go API:
+
 ```go
 // example/hello.go
 package main
@@ -549,17 +699,11 @@ import (
 func main() {
     b := builder.New("hello-world")
 
-    // Install packages
     modules.Package(b, "install", "vim", "git", "htop")
-
-    // Create a file
     modules.File(b, "/etc/motd",
         modules.Content("Welcome to nestor-managed system\n"))
-
-    // Ensure SSH service is running
     modules.Service(b, "ssh", "start")
 
-    // Deploy and execute on remote host
     err := executor.Deploy(b.Playbook(), "user@remote-host", &executor.Config{
         SSHKeyPath: "~/.ssh/id_ed25519",
     })
@@ -572,6 +716,10 @@ func main() {
 3. **Execute the playbook:**
 
 ```bash
+# YAML playbook
+nestor apply hello.yaml user@remote-host
+
+# Go playbook
 go run example/hello.go
 ```
 
@@ -621,6 +769,7 @@ nestor is in active early development. The core architecture is established, but
 - ✅ Service management (systemd, sysvinit, openrc)
 - ✅ Command and script execution
 - ✅ Dry-run mode
+- ✅ YAML playbook format with `nestor apply`
 
 ### Planned
 

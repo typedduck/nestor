@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/typedduck/nestor/controller/executor"
+	"github.com/typedduck/nestor/playbook/yamlloader"
 )
 
 const (
@@ -24,6 +26,11 @@ type Command struct {
 
 var commands = []Command{
 	{
+		Name:        "apply",
+		Description: "Apply a YAML playbook to a remote host",
+		Execute:     cmdApply,
+	},
+	{
 		Name:        "init",
 		Description: "Initialize a remote system for nestor",
 		Execute:     cmdInit,
@@ -38,6 +45,15 @@ var commands = []Command{
 		Description: "Check the status of a remote agent",
 		Execute:     cmdStatus,
 	},
+}
+
+// varFlags implements flag.Value to accumulate repeated -var key=value flags.
+type varFlags []string
+
+func (v *varFlags) String() string { return strings.Join(*v, ", ") }
+func (v *varFlags) Set(s string) error {
+	*v = append(*v, s)
+	return nil
 }
 
 func main() {
@@ -72,6 +88,60 @@ func printUsage() {
 		fmt.Printf("  %-10s %s\n", cmd.Name, cmd.Description)
 	}
 	fmt.Println("\nUse 'nestor <command> -h' for command-specific help")
+}
+
+// cmdApply loads a YAML playbook and deploys it to a remote host.
+func cmdApply(args []string) error {
+	fs := flag.NewFlagSet("apply", flag.ExitOnError)
+
+	var vars varFlags
+	fs.Var(&vars, "var", "Set a playbook variable (key=value), may be repeated")
+	sshKey := fs.String("ssh-key", os.Getenv("HOME")+"/.ssh/id_ed25519", "SSH private key")
+	signingKey := fs.String("signing-key", "", "Signing key (defaults to SSH key)")
+	knownHosts := fs.String("known-hosts", os.Getenv("HOME")+"/.ssh/known_hosts", "known_hosts file")
+	dryRun := fs.Bool("dry-run", false, "Package and sign without deploying")
+
+	fs.Parse(args)
+
+	if fs.NArg() < 2 {
+		fmt.Println("Usage: nestor apply [options] <playbook.yaml> user@host")
+		fmt.Println("\nOptions:")
+		fs.PrintDefaults()
+		return fmt.Errorf("missing playbook file and/or host argument")
+	}
+
+	playbookFile := fs.Arg(0)
+	host := fs.Arg(1)
+
+	// Parse -var flags into a map; CLI vars override YAML vars.
+	varMap := make(map[string]string, len(vars))
+	for _, kv := range vars {
+		idx := strings.IndexByte(kv, '=')
+		if idx < 0 {
+			return fmt.Errorf("-var %q must be in key=value form", kv)
+		}
+		varMap[kv[:idx]] = kv[idx+1:]
+	}
+
+	data, err := os.ReadFile(playbookFile)
+	if err != nil {
+		return fmt.Errorf("failed to read playbook file: %w", err)
+	}
+
+	b, err := yamlloader.Load(data, varMap)
+	if err != nil {
+		return fmt.Errorf("failed to load playbook: %w", err)
+	}
+
+	pb := b.Playbook()
+	log.Printf("[INFO ] loaded %q: %d action(s)", pb.Name, len(pb.Actions))
+
+	return executor.Deploy(pb, host, &executor.Config{
+		SSHKeyPath:     *sshKey,
+		SigningKeyPath: *signingKey,
+		KnownHostsPath: *knownHosts,
+		DryRun:         *dryRun,
+	})
 }
 
 // cmdInit initializes a remote system for nestor

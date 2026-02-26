@@ -1,0 +1,87 @@
+name: webserver-setup
+
+environment:
+  ENVIRONMENT: production
+
+vars:
+  app_port: "8080"
+  db_host: db.example.com
+
+actions:
+  # Update package cache and upgrade installed packages
+  - package: update
+  - package: upgrade
+
+  # Install required packages
+  - package:
+      install: [nginx, vim, curl]
+
+  # Remove conflicting packages
+  - package:
+      remove: [apache2]
+
+  # Create application directories
+  - directory:
+      path: /opt/app
+      owner: webapp
+      group: webapp
+      mode: "0755"
+      recursive: true
+
+  # Write the welcome message
+  - file:
+      path: /etc/motd
+      content: "Welcome to the webserver\n"
+      mode: "0644"
+      owner: root
+      group: root
+
+  # Deploy config from template with variable substitution
+  - file:
+      path: /opt/app/config.toml
+      template: config.toml.tmpl
+      vars:
+        DBHost: "${db_host}"
+        Port: "${app_port}"
+      owner: webapp
+      mode: "0640"
+
+  # Upload the application binary
+  - file:
+      path: /opt/app/bin/app
+      upload: ./build/app
+      mode: "0755"
+
+  # Enable nginx site via symlink
+  - symlink:
+      dest: /etc/nginx/sites-enabled/app
+      target: /etc/nginx/sites-available/app
+
+  # Remove old application directory
+  - remove:
+      path: /opt/app-old
+      recursive: true
+
+  # Simple one-liner command
+  - command: echo hello
+
+  # Command with idempotency guard
+  - command:
+      run: useradd -m deploy
+      creates: /home/deploy
+      env: [HOME=/root]
+      chdir: /tmp
+
+  # Run a setup script
+  - script:
+      source: scripts/setup.sh
+      args: [--verbose]
+      creates: /etc/setup.done
+
+  # Start and reload nginx
+  - service:
+      name: nginx
+      action: start
+  - service:
+      name: nginx
+      action: reload
