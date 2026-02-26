@@ -249,9 +249,9 @@ func registerHandlers(engine *executor.Engine) {
 	engine.RegisterHandler("service.reload", handlers.NewServiceReloadHandler())
 	engine.RegisterHandler("service.restart", handlers.NewServiceRestartHandler())
 
-	// Command handlers (to be implemented)
-	// engine.RegisterHandler("command.execute", handlers.NewCommandExecuteHandler())
-	// engine.RegisterHandler("script.execute", handlers.NewScriptExecuteHandler())
+	// Command handlers
+	engine.RegisterHandler("command.execute", handlers.NewCommandExecuteHandler())
+	engine.RegisterHandler("script.execute", handlers.NewScriptExecuteHandler())
 }
 
 // displayResults displays the execution results
