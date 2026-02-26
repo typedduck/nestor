@@ -89,7 +89,7 @@ Modules run on the controller side and assemble the provisioning workflow. They:
 Example module types:
 - Package management (apt, yum, dnf)
 - File operations (upload, template, permissions)
-- Service management (systemd, init (planned feature))
+- Service management (systemd, sysvinit, openrc)
 - Command execution (shell scripts, one-off commands)
 
 ### Actions
@@ -150,33 +150,28 @@ Modules in nestor use a fluent, builder-style API to construct provisioning work
 package main
 
 import (
-    "github.com/yourusername/nestor/executor"
-    "github.com/yourusername/nestor/modules"
-    "github.com/yourusername/nestor/playbook"
+    "github.com/typedduck/nestor/modules"
+    "github.com/typedduck/nestor/playbook/builder"
 )
 
 func main() {
     // Create a new playbook
-    pb := playbook.New("webserver-setup")
-    
+    b := builder.New("webserver-setup")
+
     // Set environment variables available to all actions
-    pb.SetEnv("APP_VERSION", "1.2.3")
-    pb.SetEnv("DEPLOY_USER", "appuser")
-    
+    b.SetEnv("APP_VERSION", "1.2.3")
+    b.SetEnv("DEPLOY_USER", "appuser")
+
     // Add actions using module functions
-    modules.Package(pb, "install", "nginx", "postgresql", "redis")
-    modules.File(pb, "/etc/nginx/nginx.conf", 
+    modules.Package(b, "install", "nginx", "postgresql", "redis")
+    modules.File(b, "/etc/nginx/nginx.conf",
         modules.FromTemplate("templates/nginx.conf.tmpl"),
         modules.Owner("root", "root"),
         modules.Mode(0644))
-    
-    modules.Service(pb, "nginx", "running", "enabled")
-    
-    // Execute on remote host
-    err := executor.Deploy(pb, "user@webserver-01.example.com", &executor.Config{})
-    if err != nil {
-        panic(err)
-    }
+
+    modules.Service(b, "nginx", "start")
+
+    // b.Playbook() returns the assembled playbook for packaging and transfer
 }
 ```
 
@@ -184,32 +179,32 @@ func main() {
 
 ```go
 // Install packages
-modules.Package(pb, "install", "vim", "git", "htop")
+modules.Package(b, "install", "vim", "git", "htop")
 
 // Remove packages
-modules.Package(pb, "remove", "apache2")
+modules.Package(b, "remove", "apache2")
 
 // Update package cache
-modules.Package(pb, "update")
+modules.Package(b, "update")
 
 // Upgrade all packages
-modules.Package(pb, "upgrade")
+modules.Package(b, "upgrade")
 ```
 
-The Package module generates actions like:
-- Detect package manager (apt, yum, dnf)
-- Update cache if needed
-- Install/remove packages idempotently
+The Package module generates actions that:
+- Detect the package manager (apt, yum, dnf)
+- Update the cache when needed
+- Install or remove packages idempotently
 
 ### File Module
 
 ```go
 // Simple file content
-modules.File(pb, "/etc/motd", 
+modules.File(b, "/etc/motd",
     modules.Content("Welcome to the server\n"))
 
 // From template with variables
-modules.File(pb, "/etc/app/config.yml",
+modules.File(b, "/etc/app/config.yml",
     modules.FromTemplate("config.yml.tmpl"),
     modules.TemplateVars(map[string]string{
         "DBHost": "db.example.com",
@@ -217,77 +212,84 @@ modules.File(pb, "/etc/app/config.yml",
     }))
 
 // Upload local file
-modules.File(pb, "/usr/local/bin/myapp",
+modules.File(b, "/usr/local/bin/myapp",
     modules.FromFile("./build/myapp"),
     modules.Mode(0755))
 
 // Directory creation
-modules.Directory(pb, "/var/app/data",
+modules.Directory(b, "/var/app/data",
     modules.Owner("appuser", "appgroup"),
     modules.Mode(0750),
     modules.Recursive(true))
 
 // Symlink
-modules.Symlink(pb, "/etc/nginx/sites-enabled/myapp",
+modules.Symlink(b,
+    "/etc/nginx/sites-enabled/myapp",
     "/etc/nginx/sites-available/myapp")
+
+// Remove file or directory
+modules.Remove(b, "/opt/webapp-old", modules.Recursive(true))
 ```
+
+Templates use Go's `text/template` syntax. Undefined variables cause execution to fail immediately, surfacing errors early.
 
 ### Service Module
 
 ```go
-// Start and enable service
-modules.Service(pb, "nginx", "running", "enabled")
+// Start a service (no-op if already running)
+modules.Service(b, "nginx", "start")
 
-// Stop and disable service
-modules.Service(pb, "apache2", "stopped", "disabled")
+// Stop a service (no-op if already stopped)
+modules.Service(b, "apache2", "stop")
 
-// Reload service (for config changes)
-modules.Service(pb, "nginx", "reloaded")
+// Reload service configuration (always acts)
+modules.Service(b, "nginx", "reload")
 
-// Restart service
-modules.Service(pb, "postgresql", "restarted")
+// Restart a service (always acts)
+modules.Service(b, "postgresql", "restart")
 ```
 
-The Service module:
-- Detects init system (systemd, init.d)
-- Manages service state idempotently
-- Handles enable/disable at boot
+The Service module detects the init system (systemd, sysvinit, openrc) and executes the appropriate command.
 
 ### Command Module
 
 ```go
-// Simple command execution
-modules.Command(pb, "echo 'Setup complete' >> /var/log/setup.log")
+// Run a shell command via /bin/sh -c
+modules.Command(b, "echo 'Setup complete' >> /var/log/setup.log")
 
-// Command with working directory
-modules.Command(pb, "npm install",
-    modules.WorkDir("/var/app"),
-    modules.RunAs("appuser"))
+// With a working directory
+modules.Command(b, "make install", modules.Chdir("/opt/src/app"))
 
-// Script execution
-modules.Script(pb, 
-    modules.FromFile("scripts/database-migration.sh"),
-    modules.Interpreter("/bin/bash"),
-    modules.OnlyIf("test -f /var/app/needs-migration"))
+// Idempotent: skip if the given path already exists
+modules.Command(b, "useradd -m deploy", modules.Creates("/home/deploy"))
 
-// Conditional execution
-modules.Command(pb, "systemctl restart app",
-    modules.Unless("systemctl is-active app"))
+// With extra environment variables
+modules.Command(b, "make install",
+    modules.Chdir("/opt/src/app"),
+    modules.CommandEnv("DESTDIR=/opt", "PREFIX=/usr/local"))
+
+// Execute a script from the playbook bundle
+modules.Script(b, "scripts/database-migration.sh")
+
+// Script with arguments and idempotency guard
+modules.Script(b, "scripts/setup.sh",
+    modules.ScriptArgs("--verbose"),
+    modules.ScriptCreates("/etc/app/setup.done"))
 ```
 
-### User & Group Module
+The following options are planned for a future release:
 
 ```go
-// Create user
-modules.User(pb, "appuser",
-    modules.UID(1001),
-    modules.Group("appgroup"),
-    modules.Home("/home/appuser"),
-    modules.Shell("/bin/bash"))
+// Run command as a different user (planned)
+modules.Command(b, "npm install", modules.RunAs("appuser"))
 
-// Create group
-modules.Group(pb, "appgroup",
-    modules.GID(1001))
+// Skip command if shell condition is true (planned)
+modules.Command(b, "systemctl restart app",
+    modules.Unless("systemctl is-active --quiet app"))
+
+// Run command only if shell condition is true (planned)
+modules.Command(b, "bundle install",
+    modules.OnlyIf("test -f /opt/app/Gemfile"))
 ```
 
 ### Advanced Module Example
@@ -296,75 +298,66 @@ modules.Group(pb, "appgroup",
 package main
 
 import (
-    "github.com/yourusername/nestor/executor"
-    "github.com/yourusername/nestor/modules"
-    "github.com/yourusername/nestor/playbook"
+    "log"
+
+    "github.com/typedduck/nestor/controller/executor"
+    "github.com/typedduck/nestor/modules"
+    "github.com/typedduck/nestor/playbook/builder"
 )
 
-func DeployWebApp(pb *playbook.Playbook, version string) {
-    appUser := "webapp"
+func deployWebApp(b *builder.Builder, version string) {
     appDir := "/opt/webapp"
-    
-    // Setup user and directories
-    modules.Group(pb, appUser, modules.GID(2000))
-    modules.User(pb, appUser, 
-        modules.UID(2000),
-        modules.Group(appUser),
-        modules.Home(appDir),
-        modules.Shell("/bin/false"))
-    
-    modules.Directory(pb, appDir,
-        modules.Owner(appUser, appUser),
-        modules.Mode(0755))
-    
+
     // Install dependencies
-    modules.Package(pb, "install", 
-        "nginx", "postgresql-client", "redis-tools")
-    
+    modules.Package(b, "install", "nginx", "postgresql-client", "redis-tools")
+
+    // Create application directory
+    modules.Directory(b, appDir, modules.Mode(0755))
+
     // Deploy application binary
-    modules.File(pb, appDir + "/webapp",
-        modules.FromFile("./build/webapp-" + version),
-        modules.Owner(appUser, appUser),
+    modules.File(b, appDir+"/webapp",
+        modules.FromFile("./build/webapp-"+version),
         modules.Mode(0755))
-    
-    // Deploy configuration
-    modules.File(pb, appDir + "/config.toml",
+
+    // Deploy configuration from template
+    modules.File(b, appDir+"/config.toml",
         modules.FromTemplate("config.toml.tmpl"),
         modules.TemplateVars(map[string]string{
             "Version": version,
             "DataDir": appDir + "/data",
         }),
-        modules.Owner(appUser, appUser),
         modules.Mode(0640))
-    
+
     // Setup systemd service
-    modules.File(pb, "/etc/systemd/system/webapp.service",
+    modules.File(b, "/etc/systemd/system/webapp.service",
         modules.FromTemplate("webapp.service.tmpl"))
-    
-    modules.Command(pb, "systemctl daemon-reload")
-    
+
+    modules.Command(b, "systemctl daemon-reload")
+
     // Configure nginx reverse proxy
-    modules.File(pb, "/etc/nginx/sites-available/webapp",
+    modules.File(b, "/etc/nginx/sites-available/webapp",
         modules.FromTemplate("nginx-webapp.conf.tmpl"))
-    
-    modules.Symlink(pb, 
+
+    modules.Symlink(b,
         "/etc/nginx/sites-enabled/webapp",
         "/etc/nginx/sites-available/webapp")
-    
+
     // Start services
-    modules.Service(pb, "nginx", "reloaded")
-    modules.Service(pb, "webapp", "running", "enabled")
+    modules.Service(b, "nginx", "reload")
+    modules.Service(b, "webapp", "restart")
 }
 
 func main() {
-    pb := playbook.New("webapp-deployment")
-    pb.SetEnv("ENVIRONMENT", "production")
-    
-    DeployWebApp(pb, "v1.2.3")
-    
-    err := executor.Deploy(pb, "deploy@app-server-01.example.com", &executor.Config{})
+    b := builder.New("webapp-deployment")
+    b.SetEnv("ENVIRONMENT", "production")
+
+    deployWebApp(b, "v1.2.3")
+
+    err := executor.Deploy(b.Playbook(), "deploy@app-server-01.example.com", &executor.Config{
+        SSHKeyPath: "~/.ssh/deploy_key",
+    })
     if err != nil {
-        panic(err)
+        log.Fatalf("deployment failed: %v", err)
     }
 }
 ```
@@ -401,10 +394,10 @@ playbook.tar.gz
   "actions": [
     {
       "id": "action-001",
-      "type": "group.create",
+      "type": "package.install",
       "params": {
-        "name": "webapp",
-        "gid": 2000
+        "packages": ["nginx", "postgresql-client", "redis-tools"],
+        "update_cache": true
       }
     },
     ...
@@ -427,36 +420,28 @@ a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0  upload/config.
 The agent implements these action types:
 
 **Package Management:**
-- `package.install` - Install packages
-- `package.remove` - Remove packages
+- `package.install` - Install packages (idempotent: skips already-installed packages)
+- `package.remove` - Remove packages (idempotent: skips packages not installed)
 - `package.update` - Update package cache
-- `package.upgrade` - Upgrade installed packages
+- `package.upgrade` - Upgrade all installed packages
 
 **File Operations:**
-- `file.upload` - Upload file from playbook archive
 - `file.content` - Create file with inline content
-- `file.template` - Render template and create file
-- `file.symlink` - Create symbolic link
-- `directory.create` - Create directory (with recursive option)
+- `file.upload` - Upload file from playbook archive
+- `file.template` - Render Go `text/template` and write file
+- `file.symlink` - Create or replace symbolic link
 - `file.remove` - Remove file or directory
+- `directory.create` - Create directory (with recursive option)
 
 **Service Management:**
-- `service.start` - Start service (with optional enable)
-- `service.stop` - Stop service (with optional disable)
+- `service.start` - Start service (no-op if already running)
+- `service.stop` - Stop service (no-op if already stopped)
 - `service.restart` - Restart service
 - `service.reload` - Reload service configuration
-- `service.enable` - Enable service at boot
-- `service.disable` - Disable service at boot
-
-**User & Group Management:**
-- `user.create` - Create user account
-- `user.remove` - Remove user account
-- `group.create` - Create group
-- `group.remove` - Remove group
 
 **Command Execution:**
-- `command.execute` - Run shell command
-- `script.execute` - Execute script from playbook archive
+- `command.execute` - Run shell command via `/bin/sh -c`
+- `script.execute` - Execute script from playbook archive via `/bin/sh`
 
 ### Execution Result
 
@@ -474,39 +459,27 @@ After execution, the agent reports results back to the controller:
       "id": "action-001",
       "status": "success",
       "changed": true,
-      "message": "Group 'webapp' created"
+      "message": "Installed 3 packages: nginx, postgresql-client, redis-tools"
     },
     {
       "id": "action-002",
-      "status": "success",
-      "changed": true,
-      "message": "User 'webapp' created"
-    },
-    {
-      "id": "action-003",
       "status": "success",
       "changed": false,
       "message": "Directory '/opt/webapp' already exists with correct permissions"
     },
     {
-      "id": "action-004",
+      "id": "action-003",
       "status": "success",
       "changed": true,
-      "message": "Installed 3 packages: nginx, postgresql-client, redis-tools"
-    },
-    {
-      "id": "action-005",
-      "status": "success",
-      "changed": true,
-      "message": "File uploaded to /opt/webapp/webapp"
+      "message": "Uploaded upload/webapp-v1.2.3 to /opt/webapp/webapp (8388608 bytes)"
     }
   ],
   "summary": {
-    "total": 12,
-    "success": 12,
+    "total": 10,
+    "success": 10,
     "failed": 0,
     "skipped": 0,
-    "changed": 8
+    "changed": 7
   }
 }
 ```
@@ -516,7 +489,7 @@ After execution, the agent reports results back to the controller:
 ### Prerequisites
 
 **Controller:**
-- Go 1.25+ (for building)
+- Go 1.24+ (for building)
 - SSH client
 - SSH key pair
 
@@ -566,29 +539,32 @@ This command:
 package main
 
 import (
-		"github.com/yourusername/nestor/executor"
-    "github.com/yourusername/nestor/modules"
-    "github.com/yourusername/nestor/playbook"
+    "log"
+
+    "github.com/typedduck/nestor/controller/executor"
+    "github.com/typedduck/nestor/modules"
+    "github.com/typedduck/nestor/playbook/builder"
 )
 
 func main() {
-    // Create a new playbook
-    pb := playbook.New("hello-world")
-    
+    b := builder.New("hello-world")
+
     // Install packages
-    modules.Package(pb, "install", "vim", "git", "htop")
-    
+    modules.Package(b, "install", "vim", "git", "htop")
+
     // Create a file
-    modules.File(pb, "/etc/motd", 
+    modules.File(b, "/etc/motd",
         modules.Content("Welcome to nestor-managed system\n"))
-    
-    // Ensure SSH service is running and enabled
-    modules.Service(pb, "ssh", "running", "enabled")
-    
+
+    // Ensure SSH service is running
+    modules.Service(b, "ssh", "start")
+
     // Deploy and execute on remote host
-    err := executor.Execute(pb, "user@remote-host", &executor.Config{})
+    err := executor.Deploy(b.Playbook(), "user@remote-host", &executor.Config{
+        SSHKeyPath: "~/.ssh/id_ed25519",
+    })
     if err != nil {
-        panic(err)
+        log.Fatalf("deployment failed: %v", err)
     }
 }
 ```
@@ -604,7 +580,7 @@ The controller will:
 - Transfer it to the remote host
 - Execute the agent via SSH
 - Display execution progress and results
-    
+
 ### Reconnecting to a Detached Agent
 
 If the SSH connection drops during execution, the agent continues running:
@@ -640,15 +616,19 @@ nestor is in active early development. The core architecture is established, but
 - ✅ Agent detach/reattach capability
 - ✅ Playbook signature verification
 - ✅ Manifest validation
+- ✅ Package management (apt, yum, dnf)
+- ✅ File operations (content, upload, template, symlink, remove, directory)
+- ✅ Service management (systemd, sysvinit, openrc)
+- ✅ Command and script execution
+- ✅ Dry-run mode
 
 ### Planned
 
-- 🔄 Core action implementations (package, file, service, command)
-- 🔄 Standard module library
+- 📋 User and group management
+- 📋 Command options: `RunAs`, `Unless`, `OnlyIf`
 - 📋 Plugin system for custom modules
 - 📋 Parallel execution across multiple hosts
 - 📋 Inventory management
-- 📋 Dry-run mode
 - 📋 Rollback capabilities
 - 📋 Comprehensive documentation
 
