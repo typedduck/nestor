@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -29,6 +30,11 @@ var commands = []Command{
 		Name:        "apply",
 		Description: "Apply a YAML playbook to a remote host",
 		Execute:     cmdApply,
+	},
+	{
+		Name:        "local",
+		Description: "Execute a playbook directory on the local machine",
+		Execute:     cmdLocal,
 	},
 	{
 		Name:        "init",
@@ -142,6 +148,56 @@ func cmdApply(args []string) error {
 		KnownHostsPath: *knownHosts,
 		DryRun:         *dryRun,
 	})
+}
+
+// cmdLocal loads a YAML playbook from a directory and executes it locally.
+// The directory must contain playbook.yaml; uploads/ is the default upload root.
+// Run with sudo on Linux or when writing to system paths on macOS.
+func cmdLocal(args []string) error {
+	fs := flag.NewFlagSet("local", flag.ExitOnError)
+
+	var vars varFlags
+	fs.Var(&vars, "var", "Set a playbook variable (key=value), may be repeated")
+	dryRun := fs.Bool("dry-run", false, "Show what would be done without making changes")
+
+	fs.Parse(args)
+
+	if fs.NArg() < 1 {
+		fmt.Println("Usage: nestor local [options] <dir>")
+		fmt.Println()
+		fmt.Println("  <dir> must contain playbook.yaml.")
+		fmt.Println("  Upload files are resolved relative to <dir>/.")
+		fmt.Println()
+		fmt.Println("Options:")
+		fs.PrintDefaults()
+		return fmt.Errorf("missing playbook directory argument")
+	}
+
+	dir := fs.Arg(0)
+
+	varMap := make(map[string]string, len(vars))
+	for _, kv := range vars {
+		idx := strings.IndexByte(kv, '=')
+		if idx < 0 {
+			return fmt.Errorf("-var %q must be in key=value form", kv)
+		}
+		varMap[kv[:idx]] = kv[idx+1:]
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, "playbook.yaml"))
+	if err != nil {
+		return fmt.Errorf("failed to read playbook.yaml: %w", err)
+	}
+
+	b, err := yamlloader.Load(data, varMap)
+	if err != nil {
+		return fmt.Errorf("failed to load playbook: %w", err)
+	}
+
+	pb := b.Playbook()
+	log.Printf("[INFO ] loaded %q: %d action(s)", pb.Name, len(pb.Actions))
+
+	return executor.Local(pb, dir, *dryRun)
 }
 
 // cmdInit initializes a remote system for nestor

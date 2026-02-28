@@ -132,6 +132,10 @@ func (h *PackageRemoveHandler) isPackageInstalled(cmd executor.CommandRunner,
 		err := cmd.Run(pm, nil, "list", "installed", pkg)
 		return err == nil, nil
 
+	case "brew":
+		err := cmd.Run("brew", nil, "list", "--formula", pkg)
+		return err == nil, nil
+
 	default:
 		return false, fmt.Errorf("unsupported package manager: %s", pm)
 	}
@@ -154,6 +158,9 @@ func (h *PackageRemoveHandler) removePackages(cmd executor.CommandRunner,
 	case "dnf":
 		name = "dnf"
 		args = append([]string{"remove", "-y", "-q"}, packages...)
+	case "brew":
+		name = "brew"
+		args = append([]string{"uninstall"}, packages...)
 	default:
 		return fmt.Errorf("unsupported package manager: %s", pm)
 	}
@@ -232,6 +239,13 @@ func (h *PackageUpdateHandler) updateCache(cmd executor.CommandRunner, pm string
 		}
 		return nil
 
+	case "brew":
+		output, _, err := cmd.CombinedOutput("brew", nil, "update")
+		if err != nil {
+			return fmt.Errorf("brew update failed: %s", string(output))
+		}
+		return nil
+
 	default:
 		return fmt.Errorf("unsupported package manager: %s", pm)
 	}
@@ -297,6 +311,9 @@ func (h *PackageUpgradeHandler) upgradePackages(cmd executor.CommandRunner, pm s
 	case "dnf":
 		name = "dnf"
 		args = []string{"update", "-y", "-q"}
+	case "brew":
+		name = "brew"
+		args = []string{"upgrade"}
 	default:
 		return fmt.Errorf("unsupported package manager: %s", pm)
 	}

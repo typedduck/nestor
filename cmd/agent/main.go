@@ -87,7 +87,7 @@ func main() {
 	engine.SetDryRun(config.DryRun)
 
 	// Register action handlers
-	registerHandlers(engine)
+	handlers.RegisterAll(engine)
 
 	// Execute the playbook
 	log.Println("[INFO] starting playbook execution...")
@@ -223,36 +223,6 @@ func extractArchive(archivePath, extractPath string) error {
 	return nil
 }
 
-// registerHandlers registers all action handlers with the execution engine
-func registerHandlers(engine *executor.Engine) {
-	// Package handlers
-	engine.RegisterHandler("package.install", handlers.NewPackageInstallHandler())
-	engine.RegisterHandler("package.remove", handlers.NewPackageRemoveHandler())
-	engine.RegisterHandler("package.update", handlers.NewPackageUpdateHandler())
-	engine.RegisterHandler("package.upgrade", handlers.NewPackageUpgradeHandler())
-
-	// File handlers
-	engine.RegisterHandler("file.content", handlers.NewFileContentHandler())
-	engine.RegisterHandler("file.template", handlers.NewFileTemplateHandler())
-	engine.RegisterHandler("file.upload", handlers.NewFileUploadHandler())
-	engine.RegisterHandler("file.symlink", handlers.NewSymlinkHandler())
-
-	// Directory handlers
-	engine.RegisterHandler("directory.create", handlers.NewDirectoryCreateHandler())
-
-	// File removal handlers
-	engine.RegisterHandler("file.remove", handlers.NewFileRemoveHandler())
-
-	// Service handlers
-	engine.RegisterHandler("service.start", handlers.NewServiceStartHandler())
-	engine.RegisterHandler("service.stop", handlers.NewServiceStopHandler())
-	engine.RegisterHandler("service.reload", handlers.NewServiceReloadHandler())
-	engine.RegisterHandler("service.restart", handlers.NewServiceRestartHandler())
-
-	// Command handlers
-	engine.RegisterHandler("command.execute", handlers.NewCommandExecuteHandler())
-	engine.RegisterHandler("script.execute", handlers.NewScriptExecuteHandler())
-}
 
 // displayResults displays the execution results
 func displayResults(result *executor.ExecutionResult) {

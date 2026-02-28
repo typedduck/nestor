@@ -16,6 +16,7 @@ nestor follows a controller-agent architecture where the controller runs on your
 - **Idempotent actions** - Built-in actions are designed to be safely re-runnable
 - **Signed playbooks** - Cryptographic verification of playbook integrity and authenticity
 - **YAML playbooks** - Write and run playbooks without writing Go code using the `nestor apply` command
+- **Local execution** - Run a playbook on the local machine with `nestor local` — no SSH, no agent, no packaging
 - **Simple deployment** - Bootstrap remote systems with a single init command
 - **Cross-platform** - Runs on Linux, macOS, and other Unix-like systems
 - **80% solution** - Covers most common provisioning needs without the complexity of enterprise tools
@@ -193,7 +194,7 @@ modules.Package(b, "upgrade")
 ```
 
 The Package module generates actions that:
-- Detect the package manager (apt, yum, dnf)
+- Detect the package manager (apt, yum, dnf, brew)
 - Update the cache when needed
 - Install or remove packages idempotently
 
@@ -493,6 +494,51 @@ nestor apply --dry-run webserver.yaml deploy@app01.example.com
 
 A complete example playbook is available at [`examples/yaml/webserver.yaml`](examples/yaml/webserver.yaml).
 
+### `nestor local` Command
+
+Run a playbook directly on the local machine — no SSH connection, no agent binary, no packaging or signing. The playbook directory must contain `playbook.yaml`; any upload files are resolved relative to that directory.
+
+```
+nestor local [options] <dir>
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `-var key=value` | — | Set a playbook variable; may be repeated |
+| `-dry-run` | false | Show what would be done without making changes |
+
+**Examples:**
+
+```bash
+# Run a playbook in the current directory
+nestor local .
+
+# Dry-run to preview actions
+nestor local --dry-run /path/to/myplaybook
+
+# Override a variable at runtime
+nestor local /path/to/myplaybook -var version=1.2.3
+```
+
+**Typical directory layout:**
+
+```
+myplaybook/
+├── playbook.yaml
+└── uploads/
+    └── myapp.conf
+```
+
+**Use cases:**
+
+- Bootstrapping a freshly cloned development environment
+- Applying a template repository's provisioning playbook locally
+- Testing playbook logic before deploying to a remote host
+
+`nestor local` skips service handlers (no `service.*` actions), since managing system services on a developer's own machine is outside the intended scope. All other action types work as usual, including package installation via Homebrew on macOS.
+
+> **Note:** Operations that write to system paths (e.g. `/etc`, `/usr/local`) still require elevated privileges. Run with `sudo` on Linux when needed; on macOS, Homebrew actions run without sudo.
+
 ## Playbook Structure
 
 When modules assemble actions, they create a playbook archive with the following structure:
@@ -764,12 +810,13 @@ nestor is in active early development. The core architecture is established, but
 - ✅ Agent detach/reattach capability
 - ✅ Playbook signature verification
 - ✅ Manifest validation
-- ✅ Package management (apt, yum, dnf)
+- ✅ Package management (apt, yum, dnf, Homebrew on macOS)
 - ✅ File operations (content, upload, template, symlink, remove, directory)
 - ✅ Service management (systemd, sysvinit, openrc)
 - ✅ Command and script execution
 - ✅ Dry-run mode
 - ✅ YAML playbook format with `nestor apply`
+- ✅ Local execution with `nestor local` (no SSH, no agent — runs in-process on the local machine)
 
 ### Planned
 

@@ -80,6 +80,9 @@ func DetectSystem(fr FileReader, cl CommandLooker) *Info {
 		info.Distribution = DetectDistribution(fr)
 		info.PackageManager = DetectPackageManager(cl)
 		info.InitSystem = DetectInitSystem(fr, cl)
+	} else if info.OS == "darwin" {
+		info.PackageManager = DetectPackageManager(cl)
+		info.InitSystem = "launchctl"
 	}
 
 	return info
@@ -126,6 +129,7 @@ func DetectPackageManager(cl CommandLooker) string {
 		{"pacman", "pacman"},
 		{"zypper", "zypper"},
 		{"apk", "apk"},
+		{"brew", "brew"},
 	}
 
 	for _, mgr := range managers {

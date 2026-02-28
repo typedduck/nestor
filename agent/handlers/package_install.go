@@ -155,6 +155,10 @@ func (h *PackageInstallHandler) isPackageInstalled(cmd executor.CommandRunner,
 		err := cmd.Run(pm, nil, "list", "installed", pkg)
 		return err == nil, nil
 
+	case "brew":
+		err := cmd.Run("brew", nil, "list", "--formula", pkg)
+		return err == nil, nil
+
 	default:
 		return false, fmt.Errorf("unsupported package manager: %s", pm)
 	}
@@ -192,6 +196,13 @@ func (h *PackageInstallHandler) updateCache(cmd executor.CommandRunner, pm strin
 		}
 		return nil
 
+	case "brew":
+		output, _, err := cmd.CombinedOutput("brew", nil, "update")
+		if err != nil {
+			return fmt.Errorf("brew update failed: %s", string(output))
+		}
+		return nil
+
 	default:
 		return fmt.Errorf("unsupported package manager: %s", pm)
 	}
@@ -216,6 +227,10 @@ func (h *PackageInstallHandler) installPackages(cmd executor.CommandRunner, pm s
 	case "dnf":
 		name = "dnf"
 		args = append([]string{"install", "-y", "-q"}, packages...)
+	case "brew":
+		name = "brew"
+		args = append([]string{"install"}, packages...)
+		opts = &executor.CommandOpts{Env: []string{"HOMEBREW_NO_AUTO_UPDATE=1"}}
 	default:
 		return fmt.Errorf("unsupported package manager: %s", pm)
 	}
