@@ -150,6 +150,60 @@ func TestPackageRemove_YumPackageNotInstalled(t *testing.T) {
 	}
 }
 
+func TestPackageRemove_BrewPackageInstalled(t *testing.T) {
+	h := NewPackageRemoveHandler()
+	cmd := executor.NewMockCommandRunner()
+	// Call 0: brew list --formula → exits 0 (installed)
+	// Call 1: brew uninstall → exits 0
+	cmd.SetResponses("brew",
+		executor.MockCommandResponse{ExitCode: 0},
+		executor.MockCommandResponse{ExitCode: 0},
+	)
+	result := h.Execute(rmAction("wget"), brewContext(cmd))
+	if result.Status != "success" {
+		t.Fatalf("expected success, got %s: %s", result.Status, result.Error)
+	}
+	if !result.Changed {
+		t.Fatal("expected changed=true after removal")
+	}
+	calls := cmd.Calls()
+	if len(calls) != 2 {
+		t.Fatalf("expected 2 brew calls (list, uninstall), got %d", len(calls))
+	}
+}
+
+func TestPackageRemove_BrewPackageNotInstalled(t *testing.T) {
+	h := NewPackageRemoveHandler()
+	cmd := executor.NewMockCommandRunner()
+	// brew list --formula → exits 1 (not installed)
+	cmd.SetResponse("brew", executor.MockCommandResponse{ExitCode: 1})
+	result := h.Execute(rmAction("wget"), brewContext(cmd))
+	if result.Status != "success" {
+		t.Fatalf("expected success, got %s: %s", result.Status, result.Error)
+	}
+	if result.Changed {
+		t.Fatal("expected no change when package not installed")
+	}
+	calls := cmd.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 brew call, got %d", len(calls))
+	}
+}
+
+func TestPackageRemove_BrewRemoveFails(t *testing.T) {
+	h := NewPackageRemoveHandler()
+	cmd := executor.NewMockCommandRunner()
+	// Call 0: list → installed; Call 1: uninstall → fails
+	cmd.SetResponses("brew",
+		executor.MockCommandResponse{ExitCode: 0},
+		executor.MockCommandResponse{Output: []byte("uninstall error"), ExitCode: 1},
+	)
+	result := h.Execute(rmAction("wget"), brewContext(cmd))
+	if result.Status != "failed" {
+		t.Fatalf("expected failed when brew uninstall fails, got %s", result.Status)
+	}
+}
+
 // --- PackageUpdateHandler ---
 
 func TestPackageUpdate_UnknownPackageManager(t *testing.T) {
@@ -224,6 +278,30 @@ func TestPackageUpdate_DnfExitCode100(t *testing.T) {
 	result := h.Execute(action, dnfContext(cmd))
 	if result.Status != "success" {
 		t.Fatalf("dnf exit 100 should be OK, got %s: %s", result.Status, result.Error)
+	}
+}
+
+func TestPackageUpdate_BrewSucceeds(t *testing.T) {
+	h := NewPackageUpdateHandler()
+	cmd := executor.NewMockCommandRunner()
+	cmd.SetResponse("brew", executor.MockCommandResponse{ExitCode: 0})
+	action := playbook.Action{ID: "test", Type: "package.update", Params: map[string]any{}}
+	result := h.Execute(action, brewContext(cmd))
+	if result.Status != "success" || !result.Changed {
+		t.Fatalf("expected success+changed, got %s changed=%v", result.Status, result.Changed)
+	}
+}
+
+func TestPackageUpdate_BrewFails(t *testing.T) {
+	h := NewPackageUpdateHandler()
+	cmd := executor.NewMockCommandRunner()
+	cmd.SetResponse("brew", executor.MockCommandResponse{
+		Output: []byte("update error"), ExitCode: 1,
+	})
+	action := playbook.Action{ID: "test", Type: "package.update", Params: map[string]any{}}
+	result := h.Execute(action, brewContext(cmd))
+	if result.Status != "failed" {
+		t.Fatalf("expected failed when brew update fails, got %s", result.Status)
 	}
 }
 
@@ -305,5 +383,29 @@ func TestPackageUpgrade_DnfSucceeds(t *testing.T) {
 	result := h.Execute(action, dnfContext(cmd))
 	if result.Status != "success" || !result.Changed {
 		t.Fatalf("expected success+changed, got %s changed=%v", result.Status, result.Changed)
+	}
+}
+
+func TestPackageUpgrade_BrewSucceeds(t *testing.T) {
+	h := NewPackageUpgradeHandler()
+	cmd := executor.NewMockCommandRunner()
+	cmd.SetResponse("brew", executor.MockCommandResponse{ExitCode: 0})
+	action := playbook.Action{ID: "test", Type: "package.upgrade", Params: map[string]any{}}
+	result := h.Execute(action, brewContext(cmd))
+	if result.Status != "success" || !result.Changed {
+		t.Fatalf("expected success+changed, got %s changed=%v", result.Status, result.Changed)
+	}
+}
+
+func TestPackageUpgrade_BrewFails(t *testing.T) {
+	h := NewPackageUpgradeHandler()
+	cmd := executor.NewMockCommandRunner()
+	cmd.SetResponse("brew", executor.MockCommandResponse{
+		Output: []byte("upgrade error"), ExitCode: 1,
+	})
+	action := playbook.Action{ID: "test", Type: "package.upgrade", Params: map[string]any{}}
+	result := h.Execute(action, brewContext(cmd))
+	if result.Status != "failed" {
+		t.Fatalf("expected failed when brew upgrade fails, got %s", result.Status)
 	}
 }

@@ -31,6 +31,14 @@ func dnfContext(cmd *executor.MockCommandRunner) *executor.ExecutionContext {
 	}
 }
 
+func brewContext(cmd *executor.MockCommandRunner) *executor.ExecutionContext {
+	return &executor.ExecutionContext{
+		SystemInfo: &executor.Info{PackageManager: "brew"},
+		FS:         executor.NewMockFileSystem(),
+		Cmd:        cmd,
+	}
+}
+
 func pkgAction(packages ...string) playbook.Action {
 	pkgs := make([]any, len(packages))
 	for i, p := range packages {
@@ -287,5 +295,87 @@ func TestPackageInstall_MultiplePackagesSomeInstalled(t *testing.T) {
 	}
 	if result.Changed {
 		t.Fatal("expected no change when all packages installed")
+	}
+}
+
+func TestPackageInstall_BrewAlreadyInstalled(t *testing.T) {
+	h := NewPackageInstallHandler()
+	cmd := executor.NewMockCommandRunner()
+	// brew list --formula succeeds → already installed
+	cmd.SetResponse("brew", executor.MockCommandResponse{ExitCode: 0})
+
+	result := h.Execute(pkgAction("wget"), brewContext(cmd))
+	if result.Status != "success" {
+		t.Fatalf("expected success, got %s: %s", result.Status, result.Error)
+	}
+	if result.Changed {
+		t.Fatal("expected no change when package already installed")
+	}
+	// Only one call: brew list --formula check
+	if len(cmd.Calls()) != 1 {
+		t.Fatalf("expected 1 call, got %d", len(cmd.Calls()))
+	}
+}
+
+func TestPackageInstall_BrewInstallsNewPackage(t *testing.T) {
+	h := NewPackageInstallHandler()
+	cmd := executor.NewMockCommandRunner()
+	// Call 0: brew list --formula → exits 1 (not installed)
+	// Call 1: brew update → exits 0
+	// Call 2: brew install → exits 0
+	cmd.SetResponses("brew",
+		executor.MockCommandResponse{ExitCode: 1},
+		executor.MockCommandResponse{ExitCode: 0},
+		executor.MockCommandResponse{ExitCode: 0},
+	)
+
+	result := h.Execute(pkgAction("wget"), brewContext(cmd))
+	if result.Status != "success" {
+		t.Fatalf("expected success, got %s: %s", result.Status, result.Error)
+	}
+	if !result.Changed {
+		t.Fatal("expected changed=true after install")
+	}
+
+	calls := cmd.Calls()
+	if len(calls) != 3 {
+		t.Fatalf("expected 3 calls (list, update, install), got %d", len(calls))
+	}
+	// Verify the install call carries HOMEBREW_NO_AUTO_UPDATE=1
+	if calls[2].Opts == nil || len(calls[2].Opts.Env) == 0 {
+		t.Error("brew install should carry HOMEBREW_NO_AUTO_UPDATE=1 env")
+	} else if calls[2].Opts.Env[0] != "HOMEBREW_NO_AUTO_UPDATE=1" {
+		t.Errorf("expected HOMEBREW_NO_AUTO_UPDATE=1, got %s", calls[2].Opts.Env[0])
+	}
+}
+
+func TestPackageInstall_BrewUpdateFails(t *testing.T) {
+	h := NewPackageInstallHandler()
+	cmd := executor.NewMockCommandRunner()
+	// Call 0: brew list --formula → not installed; Call 1: brew update → fails
+	cmd.SetResponses("brew",
+		executor.MockCommandResponse{ExitCode: 1},
+		executor.MockCommandResponse{Output: []byte("update error"), ExitCode: 1},
+	)
+
+	result := h.Execute(pkgAction("wget"), brewContext(cmd))
+	if result.Status != "failed" {
+		t.Fatalf("expected failed when brew update fails, got %s", result.Status)
+	}
+}
+
+func TestPackageInstall_BrewInstallFails(t *testing.T) {
+	h := NewPackageInstallHandler()
+	cmd := executor.NewMockCommandRunner()
+	// Call 0: list → not installed; Call 1: update → ok; Call 2: install → fails
+	cmd.SetResponses("brew",
+		executor.MockCommandResponse{ExitCode: 1},
+		executor.MockCommandResponse{ExitCode: 0},
+		executor.MockCommandResponse{Output: []byte("install error"), ExitCode: 1},
+	)
+
+	result := h.Execute(pkgAction("wget"), brewContext(cmd))
+	if result.Status != "failed" {
+		t.Fatalf("expected failed when brew install fails, got %s", result.Status)
 	}
 }
