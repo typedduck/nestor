@@ -4,14 +4,15 @@ import (
 	"testing"
 
 	"github.com/typedduck/nestor/agent/executor"
+	"github.com/typedduck/nestor/agent/executor/executortest"
 	"github.com/typedduck/nestor/playbook"
 )
 
-func fileContext(fs *executor.MockFileSystem) *executor.ExecutionContext {
+func fileContext(fs *executortest.MockFileSystem) *executor.ExecutionContext {
 	return &executor.ExecutionContext{
 		SystemInfo: &executor.Info{},
 		FS:         fs,
-		Cmd:        executor.NewMockCommandRunner(),
+		Cmd:        executortest.NewMockCommandRunner(),
 	}
 }
 
@@ -28,7 +29,7 @@ func fileAction(destination, content string) playbook.Action {
 
 func TestFileContent_MissingDestination(t *testing.T) {
 	h := NewFileContentHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	action := playbook.Action{
 		ID:   "test",
 		Type: "file.content",
@@ -44,7 +45,7 @@ func TestFileContent_MissingDestination(t *testing.T) {
 
 func TestFileContent_MissingContent(t *testing.T) {
 	h := NewFileContentHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	action := playbook.Action{
 		ID:   "test",
 		Type: "file.content",
@@ -60,7 +61,7 @@ func TestFileContent_MissingContent(t *testing.T) {
 
 func TestFileContent_DryRun(t *testing.T) {
 	h := NewFileContentHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	ctx := fileContext(fs)
 	ctx.DryRun = true
 
@@ -75,7 +76,7 @@ func TestFileContent_DryRun(t *testing.T) {
 
 func TestFileContent_CreatesNewFile(t *testing.T) {
 	h := NewFileContentHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir("/etc", 0755)
 
 	result := h.Execute(fileAction("/etc/test.conf", "hello world"), fileContext(fs))
@@ -97,7 +98,7 @@ func TestFileContent_CreatesNewFile(t *testing.T) {
 
 func TestFileContent_CreatesParentDirectories(t *testing.T) {
 	h := NewFileContentHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	// No parent dirs exist, MkdirAll should create them
 
 	result := h.Execute(fileAction("/opt/app/config/test.conf", "data"), fileContext(fs))
@@ -111,7 +112,7 @@ func TestFileContent_CreatesParentDirectories(t *testing.T) {
 
 func TestFileContent_IdempotentSameContent(t *testing.T) {
 	h := NewFileContentHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir("/etc", 0755)
 	fs.AddFile("/etc/test.conf", []byte("hello"), 0644)
 
@@ -126,7 +127,7 @@ func TestFileContent_IdempotentSameContent(t *testing.T) {
 
 func TestFileContent_UpdatesDifferentContent(t *testing.T) {
 	h := NewFileContentHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir("/etc", 0755)
 	fs.AddFile("/etc/test.conf", []byte("old content"), 0644)
 
@@ -146,7 +147,7 @@ func TestFileContent_UpdatesDifferentContent(t *testing.T) {
 
 func TestFileContent_SetsMode(t *testing.T) {
 	h := NewFileContentHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir("/etc", 0755)
 
 	action := fileAction("/etc/secret.conf", "secret")
@@ -168,7 +169,7 @@ func TestFileContent_SetsMode(t *testing.T) {
 
 func TestFileContent_MessageShowsCreated(t *testing.T) {
 	h := NewFileContentHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir("/etc", 0755)
 
 	result := h.Execute(fileAction("/etc/new.conf", "data"), fileContext(fs))
@@ -182,7 +183,7 @@ func TestFileContent_MessageShowsCreated(t *testing.T) {
 
 func TestFileContent_MessageShowsUpdated(t *testing.T) {
 	h := NewFileContentHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir("/etc", 0755)
 	fs.AddFile("/etc/existing.conf", []byte("old"), 0644)
 

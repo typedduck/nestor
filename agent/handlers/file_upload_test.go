@@ -4,17 +4,18 @@ import (
 	"testing"
 
 	"github.com/typedduck/nestor/agent/executor"
+	"github.com/typedduck/nestor/agent/executor/executortest"
 	"github.com/typedduck/nestor/playbook"
 )
 
 const testPlaybookPath = "/playbook"
 
-func uploadContext(fs *executor.MockFileSystem) *executor.ExecutionContext {
+func uploadContext(fs *executortest.MockFileSystem) *executor.ExecutionContext {
 	return &executor.ExecutionContext{
 		SystemInfo:   &executor.Info{},
 		PlaybookPath: testPlaybookPath,
 		FS:           fs,
-		Cmd:          executor.NewMockCommandRunner(),
+		Cmd:          executortest.NewMockCommandRunner(),
 	}
 }
 
@@ -31,7 +32,7 @@ func uploadAction(source, destination string) playbook.Action {
 
 func TestFileUpload_MissingSource(t *testing.T) {
 	h := NewFileUploadHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	action := playbook.Action{
 		ID: "test", Type: "file.upload",
 		Params: map[string]any{"destination": "/etc/foo"},
@@ -44,7 +45,7 @@ func TestFileUpload_MissingSource(t *testing.T) {
 
 func TestFileUpload_MissingDestination(t *testing.T) {
 	h := NewFileUploadHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	action := playbook.Action{
 		ID: "test", Type: "file.upload",
 		Params: map[string]any{"source": "upload/foo"},
@@ -57,7 +58,7 @@ func TestFileUpload_MissingDestination(t *testing.T) {
 
 func TestFileUpload_DryRun(t *testing.T) {
 	h := NewFileUploadHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	ctx := uploadContext(fs)
 	ctx.DryRun = true
 	result := h.Execute(uploadAction("upload/foo", "/etc/foo"), ctx)
@@ -71,7 +72,7 @@ func TestFileUpload_DryRun(t *testing.T) {
 
 func TestFileUpload_SourceNotFound(t *testing.T) {
 	h := NewFileUploadHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	// Source file does not exist in playbook
 	result := h.Execute(uploadAction("upload/missing", "/etc/foo"), uploadContext(fs))
 	if result.Status != "failed" {
@@ -81,7 +82,7 @@ func TestFileUpload_SourceNotFound(t *testing.T) {
 
 func TestFileUpload_NewFile(t *testing.T) {
 	h := NewFileUploadHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	// Pre-populate source in playbook bundle
 	fs.AddDir(testPlaybookPath, 0755)
 	fs.AddDir(testPlaybookPath+"/upload", 0755)
@@ -107,7 +108,7 @@ func TestFileUpload_NewFile(t *testing.T) {
 
 func TestFileUpload_IdempotentSameContent(t *testing.T) {
 	h := NewFileUploadHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir(testPlaybookPath, 0755)
 	fs.AddDir(testPlaybookPath+"/upload", 0755)
 	fs.AddFile(testPlaybookPath+"/upload/myfile", []byte("hello"), 0644)
@@ -125,7 +126,7 @@ func TestFileUpload_IdempotentSameContent(t *testing.T) {
 
 func TestFileUpload_DifferentContent(t *testing.T) {
 	h := NewFileUploadHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir(testPlaybookPath, 0755)
 	fs.AddDir(testPlaybookPath+"/upload", 0755)
 	fs.AddFile(testPlaybookPath+"/upload/myfile", []byte("new content"), 0644)
@@ -148,7 +149,7 @@ func TestFileUpload_DifferentContent(t *testing.T) {
 
 func TestFileUpload_CreatesParentDirectory(t *testing.T) {
 	h := NewFileUploadHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir(testPlaybookPath, 0755)
 	fs.AddDir(testPlaybookPath+"/upload", 0755)
 	fs.AddFile(testPlaybookPath+"/upload/myfile", []byte("data"), 0644)
@@ -165,7 +166,7 @@ func TestFileUpload_CreatesParentDirectory(t *testing.T) {
 
 func TestFileUpload_CustomMode(t *testing.T) {
 	h := NewFileUploadHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir(testPlaybookPath, 0755)
 	fs.AddDir(testPlaybookPath+"/upload", 0755)
 	fs.AddFile(testPlaybookPath+"/upload/secret", []byte("secret"), 0644)

@@ -4,10 +4,11 @@ import (
 	"testing"
 
 	"github.com/typedduck/nestor/agent/executor"
+	"github.com/typedduck/nestor/agent/executor/executortest"
 	"github.com/typedduck/nestor/playbook"
 )
 
-func opsContext(fs *executor.MockFileSystem, cmd *executor.MockCommandRunner) *executor.ExecutionContext {
+func opsContext(fs *executortest.MockFileSystem, cmd *executortest.MockCommandRunner) *executor.ExecutionContext {
 	return &executor.ExecutionContext{
 		SystemInfo: &executor.Info{},
 		FS:         fs,
@@ -19,12 +20,12 @@ func opsContext(fs *executor.MockFileSystem, cmd *executor.MockCommandRunner) *e
 
 func TestSymlink_MissingDestination(t *testing.T) {
 	h := NewSymlinkHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	action := playbook.Action{
 		ID: "test", Type: "file.symlink",
 		Params: map[string]any{"source": "/usr/bin/python3"},
 	}
-	result := h.Execute(action, opsContext(executor.NewMockFileSystem(), cmd))
+	result := h.Execute(action, opsContext(executortest.NewMockFileSystem(), cmd))
 	if result.Status != "failed" {
 		t.Fatalf("expected failed, got %s", result.Status)
 	}
@@ -32,12 +33,12 @@ func TestSymlink_MissingDestination(t *testing.T) {
 
 func TestSymlink_MissingSource(t *testing.T) {
 	h := NewSymlinkHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	action := playbook.Action{
 		ID: "test", Type: "file.symlink",
 		Params: map[string]any{"destination": "/usr/bin/python"},
 	}
-	result := h.Execute(action, opsContext(executor.NewMockFileSystem(), cmd))
+	result := h.Execute(action, opsContext(executortest.NewMockFileSystem(), cmd))
 	if result.Status != "failed" {
 		t.Fatalf("expected failed, got %s", result.Status)
 	}
@@ -45,8 +46,8 @@ func TestSymlink_MissingSource(t *testing.T) {
 
 func TestSymlink_DryRun(t *testing.T) {
 	h := NewSymlinkHandler()
-	cmd := executor.NewMockCommandRunner()
-	ctx := opsContext(executor.NewMockFileSystem(), cmd)
+	cmd := executortest.NewMockCommandRunner()
+	ctx := opsContext(executortest.NewMockFileSystem(), cmd)
 	ctx.DryRun = true
 	action := playbook.Action{
 		ID: "test", Type: "file.symlink",
@@ -66,9 +67,9 @@ func TestSymlink_DryRun(t *testing.T) {
 
 func TestSymlink_AlreadyCorrect(t *testing.T) {
 	h := NewSymlinkHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	// readlink returns the correct target
-	cmd.SetResponse("readlink", executor.MockCommandResponse{
+	cmd.SetResponse("readlink", executortest.MockCommandResponse{
 		Output: []byte("/usr/bin/python3\n"), ExitCode: 0,
 	})
 	action := playbook.Action{
@@ -78,7 +79,7 @@ func TestSymlink_AlreadyCorrect(t *testing.T) {
 			"source":      "/usr/bin/python3",
 		},
 	}
-	result := h.Execute(action, opsContext(executor.NewMockFileSystem(), cmd))
+	result := h.Execute(action, opsContext(executortest.NewMockFileSystem(), cmd))
 	if result.Status != "success" {
 		t.Fatalf("expected success, got %s: %s", result.Status, result.Error)
 	}
@@ -94,10 +95,10 @@ func TestSymlink_AlreadyCorrect(t *testing.T) {
 
 func TestSymlink_ReadlinkFails(t *testing.T) {
 	h := NewSymlinkHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	// readlink fails (symlink doesn't exist)
-	cmd.SetResponse("readlink", executor.MockCommandResponse{ExitCode: 1})
-	cmd.SetResponse("ln", executor.MockCommandResponse{ExitCode: 0})
+	cmd.SetResponse("readlink", executortest.MockCommandResponse{ExitCode: 1})
+	cmd.SetResponse("ln", executortest.MockCommandResponse{ExitCode: 0})
 	action := playbook.Action{
 		ID: "test", Type: "file.symlink",
 		Params: map[string]any{
@@ -105,7 +106,7 @@ func TestSymlink_ReadlinkFails(t *testing.T) {
 			"source":      "/usr/bin/python3",
 		},
 	}
-	result := h.Execute(action, opsContext(executor.NewMockFileSystem(), cmd))
+	result := h.Execute(action, opsContext(executortest.NewMockFileSystem(), cmd))
 	if result.Status != "success" {
 		t.Fatalf("expected success, got %s: %s", result.Status, result.Error)
 	}
@@ -124,12 +125,12 @@ func TestSymlink_ReadlinkFails(t *testing.T) {
 
 func TestSymlink_WrongTarget(t *testing.T) {
 	h := NewSymlinkHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	// readlink returns wrong target
-	cmd.SetResponse("readlink", executor.MockCommandResponse{
+	cmd.SetResponse("readlink", executortest.MockCommandResponse{
 		Output: []byte("/usr/bin/python2\n"), ExitCode: 0,
 	})
-	cmd.SetResponse("ln", executor.MockCommandResponse{ExitCode: 0})
+	cmd.SetResponse("ln", executortest.MockCommandResponse{ExitCode: 0})
 	action := playbook.Action{
 		ID: "test", Type: "file.symlink",
 		Params: map[string]any{
@@ -137,7 +138,7 @@ func TestSymlink_WrongTarget(t *testing.T) {
 			"source":      "/usr/bin/python3",
 		},
 	}
-	result := h.Execute(action, opsContext(executor.NewMockFileSystem(), cmd))
+	result := h.Execute(action, opsContext(executortest.NewMockFileSystem(), cmd))
 	if result.Status != "success" {
 		t.Fatalf("expected success, got %s: %s", result.Status, result.Error)
 	}
@@ -148,9 +149,9 @@ func TestSymlink_WrongTarget(t *testing.T) {
 
 func TestSymlink_LnFails(t *testing.T) {
 	h := NewSymlinkHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("readlink", executor.MockCommandResponse{ExitCode: 1})
-	cmd.SetResponse("ln", executor.MockCommandResponse{ExitCode: 1})
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("readlink", executortest.MockCommandResponse{ExitCode: 1})
+	cmd.SetResponse("ln", executortest.MockCommandResponse{ExitCode: 1})
 	action := playbook.Action{
 		ID: "test", Type: "file.symlink",
 		Params: map[string]any{
@@ -158,7 +159,7 @@ func TestSymlink_LnFails(t *testing.T) {
 			"source":      "/usr/bin/python3",
 		},
 	}
-	result := h.Execute(action, opsContext(executor.NewMockFileSystem(), cmd))
+	result := h.Execute(action, opsContext(executortest.NewMockFileSystem(), cmd))
 	if result.Status != "failed" {
 		t.Fatalf("expected failed, got %s", result.Status)
 	}
@@ -168,12 +169,12 @@ func TestSymlink_LnFails(t *testing.T) {
 
 func TestFileRemove_MissingPath(t *testing.T) {
 	h := NewFileRemoveHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	action := playbook.Action{
 		ID: "test", Type: "file.remove",
 		Params: map[string]any{},
 	}
-	result := h.Execute(action, opsContext(executor.NewMockFileSystem(), cmd))
+	result := h.Execute(action, opsContext(executortest.NewMockFileSystem(), cmd))
 	if result.Status != "failed" {
 		t.Fatalf("expected failed, got %s", result.Status)
 	}
@@ -181,8 +182,8 @@ func TestFileRemove_MissingPath(t *testing.T) {
 
 func TestFileRemove_DryRun(t *testing.T) {
 	h := NewFileRemoveHandler()
-	cmd := executor.NewMockCommandRunner()
-	ctx := opsContext(executor.NewMockFileSystem(), cmd)
+	cmd := executortest.NewMockCommandRunner()
+	ctx := opsContext(executortest.NewMockFileSystem(), cmd)
 	ctx.DryRun = true
 	action := playbook.Action{
 		ID: "test", Type: "file.remove",
@@ -199,8 +200,8 @@ func TestFileRemove_DryRun(t *testing.T) {
 
 func TestFileRemove_PathDoesNotExist(t *testing.T) {
 	h := NewFileRemoveHandler()
-	cmd := executor.NewMockCommandRunner()
-	fs := executor.NewMockFileSystem()
+	cmd := executortest.NewMockCommandRunner()
+	fs := executortest.NewMockFileSystem()
 	action := playbook.Action{
 		ID: "test", Type: "file.remove",
 		Params: map[string]any{"path": "/tmp/nonexistent"},
@@ -219,10 +220,10 @@ func TestFileRemove_PathDoesNotExist(t *testing.T) {
 
 func TestFileRemove_NonRecursive(t *testing.T) {
 	h := NewFileRemoveHandler()
-	cmd := executor.NewMockCommandRunner()
-	fs := executor.NewMockFileSystem()
+	cmd := executortest.NewMockCommandRunner()
+	fs := executortest.NewMockFileSystem()
 	fs.AddFile("/tmp/foo", []byte("data"), 0644)
-	cmd.SetResponse("rm", executor.MockCommandResponse{ExitCode: 0})
+	cmd.SetResponse("rm", executortest.MockCommandResponse{ExitCode: 0})
 
 	action := playbook.Action{
 		ID: "test", Type: "file.remove",
@@ -248,10 +249,10 @@ func TestFileRemove_NonRecursive(t *testing.T) {
 
 func TestFileRemove_Recursive(t *testing.T) {
 	h := NewFileRemoveHandler()
-	cmd := executor.NewMockCommandRunner()
-	fs := executor.NewMockFileSystem()
+	cmd := executortest.NewMockCommandRunner()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir("/tmp/mydir", 0755)
-	cmd.SetResponse("rm", executor.MockCommandResponse{ExitCode: 0})
+	cmd.SetResponse("rm", executortest.MockCommandResponse{ExitCode: 0})
 
 	action := playbook.Action{
 		ID: "test", Type: "file.remove",
@@ -280,10 +281,10 @@ func TestFileRemove_Recursive(t *testing.T) {
 
 func TestFileRemove_RmFails(t *testing.T) {
 	h := NewFileRemoveHandler()
-	cmd := executor.NewMockCommandRunner()
-	fs := executor.NewMockFileSystem()
+	cmd := executortest.NewMockCommandRunner()
+	fs := executortest.NewMockFileSystem()
 	fs.AddFile("/tmp/locked", []byte("data"), 0644)
-	cmd.SetResponse("rm", executor.MockCommandResponse{ExitCode: 1})
+	cmd.SetResponse("rm", executortest.MockCommandResponse{ExitCode: 1})
 
 	action := playbook.Action{
 		ID: "test", Type: "file.remove",

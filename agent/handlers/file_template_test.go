@@ -4,15 +4,16 @@ import (
 	"testing"
 
 	"github.com/typedduck/nestor/agent/executor"
+	"github.com/typedduck/nestor/agent/executor/executortest"
 	"github.com/typedduck/nestor/playbook"
 )
 
-func templateContext(fs *executor.MockFileSystem) *executor.ExecutionContext {
+func templateContext(fs *executortest.MockFileSystem) *executor.ExecutionContext {
 	return &executor.ExecutionContext{
 		SystemInfo:   &executor.Info{},
 		PlaybookPath: testPlaybookPath,
 		FS:           fs,
-		Cmd:          executor.NewMockCommandRunner(),
+		Cmd:          executortest.NewMockCommandRunner(),
 	}
 }
 
@@ -29,7 +30,7 @@ func templateAction(source, destination string) playbook.Action {
 
 func TestFileTemplate_MissingSource(t *testing.T) {
 	h := NewFileTemplateHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	action := playbook.Action{
 		ID: "test", Type: "file.template",
 		Params: map[string]any{"destination": "/etc/foo"},
@@ -42,7 +43,7 @@ func TestFileTemplate_MissingSource(t *testing.T) {
 
 func TestFileTemplate_MissingDestination(t *testing.T) {
 	h := NewFileTemplateHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	action := playbook.Action{
 		ID: "test", Type: "file.template",
 		Params: map[string]any{"source": "upload/foo.tmpl"},
@@ -55,7 +56,7 @@ func TestFileTemplate_MissingDestination(t *testing.T) {
 
 func TestFileTemplate_SourceNotFound(t *testing.T) {
 	h := NewFileTemplateHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	// Template source does not exist in playbook
 	result := h.Execute(templateAction("upload/missing.tmpl", "/etc/foo"), templateContext(fs))
 	if result.Status != "failed" {
@@ -65,7 +66,7 @@ func TestFileTemplate_SourceNotFound(t *testing.T) {
 
 func TestFileTemplate_DryRun(t *testing.T) {
 	h := NewFileTemplateHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir(testPlaybookPath, 0755)
 	fs.AddDir(testPlaybookPath+"/upload", 0755)
 	fs.AddFile(testPlaybookPath+"/upload/foo.tmpl", []byte("hello"), 0644)
@@ -83,7 +84,7 @@ func TestFileTemplate_DryRun(t *testing.T) {
 
 func TestFileTemplate_NoVariables(t *testing.T) {
 	h := NewFileTemplateHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir(testPlaybookPath, 0755)
 	fs.AddDir(testPlaybookPath+"/upload", 0755)
 	fs.AddFile(testPlaybookPath+"/upload/foo.tmpl", []byte("static content"), 0644)
@@ -108,7 +109,7 @@ func TestFileTemplate_NoVariables(t *testing.T) {
 
 func TestFileTemplate_WithVariables(t *testing.T) {
 	h := NewFileTemplateHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir(testPlaybookPath, 0755)
 	fs.AddDir(testPlaybookPath+"/upload", 0755)
 	fs.AddFile(testPlaybookPath+"/upload/greeting.tmpl", []byte("Hello, {{.Name}}!"), 0644)
@@ -133,7 +134,7 @@ func TestFileTemplate_WithVariables(t *testing.T) {
 
 func TestFileTemplate_ParseError(t *testing.T) {
 	h := NewFileTemplateHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir(testPlaybookPath, 0755)
 	fs.AddDir(testPlaybookPath+"/upload", 0755)
 	// Invalid template syntax
@@ -147,7 +148,7 @@ func TestFileTemplate_ParseError(t *testing.T) {
 
 func TestFileTemplate_ExecuteError(t *testing.T) {
 	h := NewFileTemplateHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir(testPlaybookPath, 0755)
 	fs.AddDir(testPlaybookPath+"/upload", 0755)
 	// Template references undefined key — missingkey=error should trigger
@@ -164,7 +165,7 @@ func TestFileTemplate_ExecuteError(t *testing.T) {
 
 func TestFileTemplate_IdempotentSameContent(t *testing.T) {
 	h := NewFileTemplateHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir(testPlaybookPath, 0755)
 	fs.AddDir(testPlaybookPath+"/upload", 0755)
 	fs.AddFile(testPlaybookPath+"/upload/foo.tmpl", []byte("hello"), 0644)
@@ -182,7 +183,7 @@ func TestFileTemplate_IdempotentSameContent(t *testing.T) {
 
 func TestFileTemplate_DifferentContent(t *testing.T) {
 	h := NewFileTemplateHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir(testPlaybookPath, 0755)
 	fs.AddDir(testPlaybookPath+"/upload", 0755)
 	fs.AddFile(testPlaybookPath+"/upload/foo.tmpl", []byte("new content"), 0644)

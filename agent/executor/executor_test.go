@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/typedduck/nestor/agent/executor"
+	"github.com/typedduck/nestor/agent/executor/executortest"
 	"github.com/typedduck/nestor/playbook"
 )
 
@@ -31,8 +32,8 @@ func testPlaybook(actions ...playbook.Action) *executor.Playbook {
 	}
 }
 
-func testEngine(pb *executor.Playbook, fs *executor.MockFileSystem,
-	cmd *executor.MockCommandRunner) *executor.Engine {
+func testEngine(pb *executor.Playbook, fs *executortest.MockFileSystem,
+	cmd *executortest.MockCommandRunner) *executor.Engine {
 	return executor.New(pb, &executor.Info{
 		OS:             "linux",
 		Distribution:   "ubuntu",
@@ -43,8 +44,8 @@ func testEngine(pb *executor.Playbook, fs *executor.MockFileSystem,
 }
 
 func TestEngine_ExecuteEmpty(t *testing.T) {
-	fs := executor.NewMockFileSystem()
-	cmd := executor.NewMockCommandRunner()
+	fs := executortest.NewMockFileSystem()
+	cmd := executortest.NewMockCommandRunner()
 	pb := testPlaybook()
 	engine := testEngine(pb, fs, cmd)
 
@@ -61,8 +62,8 @@ func TestEngine_ExecuteEmpty(t *testing.T) {
 }
 
 func TestEngine_ExecuteSuccess(t *testing.T) {
-	fs := executor.NewMockFileSystem()
-	cmd := executor.NewMockCommandRunner()
+	fs := executortest.NewMockFileSystem()
+	cmd := executortest.NewMockCommandRunner()
 	pb := testPlaybook(
 		playbook.Action{ID: "a1", Type: "test.action", Params: map[string]any{}},
 	)
@@ -87,8 +88,8 @@ func TestEngine_ExecuteSuccess(t *testing.T) {
 }
 
 func TestEngine_ExecuteStopsOnFailure(t *testing.T) {
-	fs := executor.NewMockFileSystem()
-	cmd := executor.NewMockCommandRunner()
+	fs := executortest.NewMockFileSystem()
+	cmd := executortest.NewMockCommandRunner()
 	pb := testPlaybook(
 		playbook.Action{ID: "a1", Type: "fail.action", Params: map[string]any{}},
 		playbook.Action{ID: "a2", Type: "test.action", Params: map[string]any{}},
@@ -117,8 +118,8 @@ func TestEngine_ExecuteStopsOnFailure(t *testing.T) {
 }
 
 func TestEngine_UnknownActionType(t *testing.T) {
-	fs := executor.NewMockFileSystem()
-	cmd := executor.NewMockCommandRunner()
+	fs := executortest.NewMockFileSystem()
+	cmd := executortest.NewMockCommandRunner()
 	pb := testPlaybook(
 		playbook.Action{ID: "a1", Type: "no.handler", Params: map[string]any{}},
 	)
@@ -137,8 +138,8 @@ func TestEngine_UnknownActionType(t *testing.T) {
 }
 
 func TestEngine_ContextHasFSAndCmd(t *testing.T) {
-	fs := executor.NewMockFileSystem()
-	cmd := executor.NewMockCommandRunner()
+	fs := executortest.NewMockFileSystem()
+	cmd := executortest.NewMockCommandRunner()
 	pb := testPlaybook(
 		playbook.Action{ID: "a1", Type: "check.context", Params: map[string]any{}},
 	)
@@ -169,8 +170,8 @@ func TestEngine_ContextHasFSAndCmd(t *testing.T) {
 }
 
 func TestEngine_DryRun(t *testing.T) {
-	fs := executor.NewMockFileSystem()
-	cmd := executor.NewMockCommandRunner()
+	fs := executortest.NewMockFileSystem()
+	cmd := executortest.NewMockCommandRunner()
 	pb := testPlaybook(
 		playbook.Action{ID: "a1", Type: "check.dryrun", Params: map[string]any{}},
 	)
@@ -190,8 +191,8 @@ func TestEngine_DryRun(t *testing.T) {
 }
 
 func TestEngine_SavesState(t *testing.T) {
-	fs := executor.NewMockFileSystem()
-	cmd := executor.NewMockCommandRunner()
+	fs := executortest.NewMockFileSystem()
+	cmd := executortest.NewMockCommandRunner()
 	pb := testPlaybook(
 		playbook.Action{ID: "a1", Type: "test.action", Params: map[string]any{}},
 	)
@@ -214,7 +215,7 @@ func TestEngine_SavesState(t *testing.T) {
 }
 
 func TestLoadState(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir("/tmp", 0755)
 	stateJSON := `{"playbook_id":"test","status":"completed","summary":{"total":1,"success":1}}`
 	fs.AddFile("/tmp/test.state", []byte(stateJSON), 0644)
@@ -232,7 +233,7 @@ func TestLoadState(t *testing.T) {
 }
 
 func TestLoadState_FileNotFound(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	_, err := executor.LoadState("/tmp/nonexistent.state", fs)
 	if err == nil {
 		t.Fatal("expected error for missing state file")
@@ -240,8 +241,8 @@ func TestLoadState_FileNotFound(t *testing.T) {
 }
 
 func TestEngine_MultipleActions(t *testing.T) {
-	fs := executor.NewMockFileSystem()
-	cmd := executor.NewMockCommandRunner()
+	fs := executortest.NewMockFileSystem()
+	cmd := executortest.NewMockCommandRunner()
 	pb := testPlaybook(
 		playbook.Action{ID: "a1", Type: "test.action", Params: map[string]any{}},
 		playbook.Action{ID: "a2", Type: "test.action", Params: map[string]any{}},
@@ -265,7 +266,6 @@ func TestEngine_MultipleActions(t *testing.T) {
 	if len(result.Actions) != 3 {
 		t.Fatalf("expected 3 action results, got %d", len(result.Actions))
 	}
-	// Verify IDs are set from the action
 	if result.Actions[1].ID != "a2" {
 		t.Fatalf("expected ID=a2, got %s", result.Actions[1].ID)
 	}

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/typedduck/nestor/agent/executor"
+	"github.com/typedduck/nestor/agent/executor/executortest"
 )
 
 // ============================================================
@@ -13,7 +14,7 @@ import (
 // ============================================================
 
 func TestMockFS_ReadFile_ReturnsContent(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddFile("/etc/test.conf", []byte("hello"), 0644)
 
 	data, err := fs.ReadFile("/etc/test.conf")
@@ -26,7 +27,7 @@ func TestMockFS_ReadFile_ReturnsContent(t *testing.T) {
 }
 
 func TestMockFS_ReadFile_NotFound(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 
 	_, err := fs.ReadFile("/nonexistent")
 	if !errors.Is(err, os.ErrNotExist) {
@@ -35,7 +36,7 @@ func TestMockFS_ReadFile_NotFound(t *testing.T) {
 }
 
 func TestMockFS_ReadFile_Directory(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir("/etc", 0755)
 
 	_, err := fs.ReadFile("/etc")
@@ -45,7 +46,7 @@ func TestMockFS_ReadFile_Directory(t *testing.T) {
 }
 
 func TestMockFS_ReadFile_ReturnsACopy(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddFile("/test", []byte("original"), 0644)
 
 	data, _ := fs.ReadFile("/test")
@@ -62,7 +63,7 @@ func TestMockFS_ReadFile_ReturnsACopy(t *testing.T) {
 // ============================================================
 
 func TestMockFS_WriteFile_CreatesFile(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir("/etc", 0755)
 
 	if err := fs.WriteFile("/etc/new.conf", []byte("content"), 0644); err != nil {
@@ -79,7 +80,7 @@ func TestMockFS_WriteFile_CreatesFile(t *testing.T) {
 }
 
 func TestMockFS_WriteFile_UpdatesExistingFile(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir("/etc", 0755)
 	fs.AddFile("/etc/test.conf", []byte("old"), 0644)
 
@@ -92,7 +93,7 @@ func TestMockFS_WriteFile_UpdatesExistingFile(t *testing.T) {
 }
 
 func TestMockFS_WriteFile_UpdatesMode(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir("/etc", 0755)
 
 	fs.WriteFile("/etc/secret.conf", []byte("data"), 0600)
@@ -104,7 +105,7 @@ func TestMockFS_WriteFile_UpdatesMode(t *testing.T) {
 }
 
 func TestMockFS_WriteFile_ParentMustExist(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 
 	err := fs.WriteFile("/nonexistent/dir/file.conf", []byte("data"), 0644)
 	if !errors.Is(err, os.ErrNotExist) {
@@ -113,7 +114,7 @@ func TestMockFS_WriteFile_ParentMustExist(t *testing.T) {
 }
 
 func TestMockFS_WriteFile_ParentMustBeDirectory(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddFile("/etc", []byte("i am a file"), 0644) // /etc is a file, not a dir
 
 	err := fs.WriteFile("/etc/test.conf", []byte("data"), 0644)
@@ -123,7 +124,7 @@ func TestMockFS_WriteFile_ParentMustBeDirectory(t *testing.T) {
 }
 
 func TestMockFS_WriteFile_StoresACopy(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir("/etc", 0755)
 
 	input := []byte("original")
@@ -137,9 +138,8 @@ func TestMockFS_WriteFile_StoresACopy(t *testing.T) {
 }
 
 func TestMockFS_WriteFile_RootLevelNeedsNoParentEntry(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 
-	// Files directly under "/" have parent "/", which is exempt from the parent check.
 	if err := fs.WriteFile("/topfile", []byte("data"), 0644); err != nil {
 		t.Fatalf("WriteFile at root level: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestMockFS_WriteFile_RootLevelNeedsNoParentEntry(t *testing.T) {
 // ============================================================
 
 func TestMockFS_Stat_FileFields(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddFile("/etc/nginx.conf", []byte("hello"), 0644)
 
 	info, err := fs.Stat("/etc/nginx.conf")
@@ -182,7 +182,7 @@ func TestMockFS_Stat_FileFields(t *testing.T) {
 }
 
 func TestMockFS_Stat_DirectoryIsDir(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir("/opt/app", 0755)
 
 	info, err := fs.Stat("/opt/app")
@@ -198,7 +198,7 @@ func TestMockFS_Stat_DirectoryIsDir(t *testing.T) {
 }
 
 func TestMockFS_Stat_DirectoryName(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir("/opt/app", 0755)
 
 	info, _ := fs.Stat("/opt/app")
@@ -208,7 +208,7 @@ func TestMockFS_Stat_DirectoryName(t *testing.T) {
 }
 
 func TestMockFS_Stat_NotFound(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 
 	_, err := fs.Stat("/nonexistent")
 	if !errors.Is(err, os.ErrNotExist) {
@@ -221,7 +221,7 @@ func TestMockFS_Stat_NotFound(t *testing.T) {
 // ============================================================
 
 func TestMockFS_Mkdir_CreatesDirectory(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir("/opt", 0755)
 
 	if err := fs.Mkdir("/opt/app", 0750); err != nil {
@@ -238,7 +238,7 @@ func TestMockFS_Mkdir_CreatesDirectory(t *testing.T) {
 }
 
 func TestMockFS_Mkdir_SetsModeDirBit(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir("/opt", 0755)
 	fs.Mkdir("/opt/app", 0750)
 
@@ -249,7 +249,7 @@ func TestMockFS_Mkdir_SetsModeDirBit(t *testing.T) {
 }
 
 func TestMockFS_Mkdir_AlreadyExists(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir("/opt", 0755)
 
 	err := fs.Mkdir("/opt", 0755)
@@ -259,7 +259,7 @@ func TestMockFS_Mkdir_AlreadyExists(t *testing.T) {
 }
 
 func TestMockFS_Mkdir_ParentMustExist(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 
 	err := fs.Mkdir("/nonexistent/child", 0755)
 	if !errors.Is(err, os.ErrNotExist) {
@@ -268,9 +268,8 @@ func TestMockFS_Mkdir_ParentMustExist(t *testing.T) {
 }
 
 func TestMockFS_Mkdir_RootLevelNeedsNoParentEntry(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 
-	// Top-level directories have parent "/", which is exempt from the check.
 	if err := fs.Mkdir("/topleveldir", 0755); err != nil {
 		t.Fatalf("Mkdir at root level: %v", err)
 	}
@@ -284,7 +283,7 @@ func TestMockFS_Mkdir_RootLevelNeedsNoParentEntry(t *testing.T) {
 // ============================================================
 
 func TestMockFS_MkdirAll_CreatesAllComponents(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 
 	if err := fs.MkdirAll("/opt/app/data/logs", 0755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
@@ -298,7 +297,7 @@ func TestMockFS_MkdirAll_CreatesAllComponents(t *testing.T) {
 }
 
 func TestMockFS_MkdirAll_Idempotent(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 
 	if err := fs.MkdirAll("/opt/app", 0755); err != nil {
 		t.Fatalf("first MkdirAll: %v", err)
@@ -309,7 +308,7 @@ func TestMockFS_MkdirAll_Idempotent(t *testing.T) {
 }
 
 func TestMockFS_MkdirAll_FailsWhenComponentIsFile(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddFile("/opt", []byte("i am a file"), 0644)
 
 	err := fs.MkdirAll("/opt/app", 0755)
@@ -323,7 +322,7 @@ func TestMockFS_MkdirAll_FailsWhenComponentIsFile(t *testing.T) {
 // ============================================================
 
 func TestMockFS_Chmod_UpdatesFileMode(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddFile("/test.conf", []byte("data"), 0644)
 
 	if err := fs.Chmod("/test.conf", 0600); err != nil {
@@ -337,7 +336,7 @@ func TestMockFS_Chmod_UpdatesFileMode(t *testing.T) {
 }
 
 func TestMockFS_Chmod_PreservesModeDirBit(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir("/opt", 0755)
 
 	fs.Chmod("/opt", 0700)
@@ -352,7 +351,7 @@ func TestMockFS_Chmod_PreservesModeDirBit(t *testing.T) {
 }
 
 func TestMockFS_Chmod_NotFound(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 
 	err := fs.Chmod("/nonexistent", 0644)
 	if !errors.Is(err, os.ErrNotExist) {
@@ -365,7 +364,7 @@ func TestMockFS_Chmod_NotFound(t *testing.T) {
 // ============================================================
 
 func TestMockFS_Chown_UpdatesOwnership(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddFile("/test.conf", []byte("data"), 0644)
 
 	if err := fs.Chown("/test.conf", 1000, 2000); err != nil {
@@ -382,7 +381,7 @@ func TestMockFS_Chown_UpdatesOwnership(t *testing.T) {
 }
 
 func TestMockFS_Chown_DefaultOwnershipIsZero(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddFile("/test.conf", []byte("data"), 0644)
 
 	uid, gid, ok := fs.FileOwner("/test.conf")
@@ -395,7 +394,7 @@ func TestMockFS_Chown_DefaultOwnershipIsZero(t *testing.T) {
 }
 
 func TestMockFS_Chown_NotFound(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 
 	err := fs.Chown("/nonexistent", 0, 0)
 	if !errors.Is(err, os.ErrNotExist) {
@@ -408,7 +407,7 @@ func TestMockFS_Chown_NotFound(t *testing.T) {
 // ============================================================
 
 func TestMockFS_Open_AlwaysReturnsError(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddFile("/test", []byte("data"), 0644)
 
 	_, err := fs.Open("/test")
@@ -422,17 +421,16 @@ func TestMockFS_Open_AlwaysReturnsError(t *testing.T) {
 // ============================================================
 
 func TestMockFS_PathCleaning_DotDot(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddFile("/etc/nginx/nginx.conf", []byte("data"), 0644)
 
-	// /etc/nginx/../nginx/nginx.conf cleans to /etc/nginx/nginx.conf
 	if !fs.Exists("/etc/nginx/../nginx/nginx.conf") {
 		t.Error("path with '..' should resolve to the same entry")
 	}
 }
 
 func TestMockFS_PathCleaning_TrailingSlash(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir("/opt/app", 0755)
 
 	if !fs.Exists("/opt/app/") {
@@ -445,7 +443,7 @@ func TestMockFS_PathCleaning_TrailingSlash(t *testing.T) {
 // ============================================================
 
 func TestMockFS_FileContent_NotFoundReturnsFalse(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 
 	_, ok := fs.FileContent("/nonexistent")
 	if ok {
@@ -454,7 +452,7 @@ func TestMockFS_FileContent_NotFoundReturnsFalse(t *testing.T) {
 }
 
 func TestMockFS_FileContent_DirectoryReturnsFalse(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir("/opt", 0755)
 
 	_, ok := fs.FileContent("/opt")
@@ -464,7 +462,7 @@ func TestMockFS_FileContent_DirectoryReturnsFalse(t *testing.T) {
 }
 
 func TestMockFS_FileMode_NotFoundReturnsFalse(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 
 	_, ok := fs.FileMode("/nonexistent")
 	if ok {
@@ -473,7 +471,7 @@ func TestMockFS_FileMode_NotFoundReturnsFalse(t *testing.T) {
 }
 
 func TestMockFS_FileOwner_NotFoundReturnsFalse(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 
 	_, _, ok := fs.FileOwner("/nonexistent")
 	if ok {
@@ -482,7 +480,7 @@ func TestMockFS_FileOwner_NotFoundReturnsFalse(t *testing.T) {
 }
 
 func TestMockFS_Exists_File(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddFile("/etc/test.conf", []byte("x"), 0644)
 
 	if !fs.Exists("/etc/test.conf") {
@@ -494,7 +492,7 @@ func TestMockFS_Exists_File(t *testing.T) {
 }
 
 func TestMockFS_Exists_Directory(t *testing.T) {
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir("/opt", 0755)
 
 	if !fs.Exists("/opt") {
@@ -507,7 +505,7 @@ func TestMockFS_Exists_Directory(t *testing.T) {
 // ============================================================
 
 func TestMockCmd_Run_Unconfigured(t *testing.T) {
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 
 	err := cmd.Run("unknown-cmd", nil)
 	if err == nil {
@@ -516,8 +514,8 @@ func TestMockCmd_Run_Unconfigured(t *testing.T) {
 }
 
 func TestMockCmd_Run_Success(t *testing.T) {
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("apt-get", executor.MockCommandResponse{ExitCode: 0})
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("apt-get", executortest.MockCommandResponse{ExitCode: 0})
 
 	if err := cmd.Run("apt-get", nil, "install", "-y", "nginx"); err != nil {
 		t.Fatalf("expected success, got: %v", err)
@@ -525,9 +523,9 @@ func TestMockCmd_Run_Success(t *testing.T) {
 }
 
 func TestMockCmd_Run_ConfiguredError(t *testing.T) {
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	sentinel := errors.New("disk full")
-	cmd.SetResponse("apt-get", executor.MockCommandResponse{Err: sentinel})
+	cmd.SetResponse("apt-get", executortest.MockCommandResponse{Err: sentinel})
 
 	err := cmd.Run("apt-get", nil)
 	if !errors.Is(err, sentinel) {
@@ -536,8 +534,8 @@ func TestMockCmd_Run_ConfiguredError(t *testing.T) {
 }
 
 func TestMockCmd_Run_NonZeroExitCode(t *testing.T) {
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("apt-get", executor.MockCommandResponse{ExitCode: 1})
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("apt-get", executortest.MockCommandResponse{ExitCode: 1})
 
 	if err := cmd.Run("apt-get", nil); err == nil {
 		t.Fatal("expected error for non-zero exit code")
@@ -549,7 +547,7 @@ func TestMockCmd_Run_NonZeroExitCode(t *testing.T) {
 // ============================================================
 
 func TestMockCmd_CombinedOutput_Unconfigured(t *testing.T) {
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 
 	_, exitCode, err := cmd.CombinedOutput("unknown-cmd", nil)
 	if err == nil {
@@ -561,8 +559,8 @@ func TestMockCmd_CombinedOutput_Unconfigured(t *testing.T) {
 }
 
 func TestMockCmd_CombinedOutput_Success(t *testing.T) {
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("dpkg-query", executor.MockCommandResponse{
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("dpkg-query", executortest.MockCommandResponse{
 		Output: []byte("install ok installed"), ExitCode: 0,
 	})
 
@@ -579,8 +577,8 @@ func TestMockCmd_CombinedOutput_Success(t *testing.T) {
 }
 
 func TestMockCmd_CombinedOutput_NonZeroExit(t *testing.T) {
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("cmd", executor.MockCommandResponse{
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("cmd", executortest.MockCommandResponse{
 		Output: []byte("error text"), ExitCode: 2,
 	})
 
@@ -597,9 +595,9 @@ func TestMockCmd_CombinedOutput_NonZeroExit(t *testing.T) {
 }
 
 func TestMockCmd_CombinedOutput_ConfiguredError(t *testing.T) {
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	sentinel := errors.New("connection refused")
-	cmd.SetResponse("cmd", executor.MockCommandResponse{
+	cmd.SetResponse("cmd", executortest.MockCommandResponse{
 		Output: []byte("partial"), ExitCode: 1, Err: sentinel,
 	})
 
@@ -607,7 +605,6 @@ func TestMockCmd_CombinedOutput_ConfiguredError(t *testing.T) {
 	if !errors.Is(err, sentinel) {
 		t.Errorf("expected sentinel error, got: %v", err)
 	}
-	// Output and ExitCode are still returned alongside the error.
 	if string(output) != "partial" {
 		t.Errorf("expected 'partial' output, got %q", string(output))
 	}
@@ -621,7 +618,7 @@ func TestMockCmd_CombinedOutput_ConfiguredError(t *testing.T) {
 // ============================================================
 
 func TestMockCmd_LookPath_Found(t *testing.T) {
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	cmd.SetLookPath("apt-get", "/usr/bin/apt-get")
 
 	path, err := cmd.LookPath("apt-get")
@@ -634,7 +631,7 @@ func TestMockCmd_LookPath_Found(t *testing.T) {
 }
 
 func TestMockCmd_LookPath_NotFound(t *testing.T) {
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 
 	_, err := cmd.LookPath("nonexistent-tool")
 	if err == nil {
@@ -643,7 +640,7 @@ func TestMockCmd_LookPath_NotFound(t *testing.T) {
 }
 
 func TestMockCmd_LookPath_NotRecordedInCalls(t *testing.T) {
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	cmd.SetLookPath("apt-get", "/usr/bin/apt-get")
 
 	cmd.LookPath("apt-get")
@@ -658,9 +655,9 @@ func TestMockCmd_LookPath_NotRecordedInCalls(t *testing.T) {
 // ============================================================
 
 func TestMockCmd_Calls_RecordsRunAndCombinedOutput(t *testing.T) {
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("apt-get", executor.MockCommandResponse{})
-	cmd.SetResponse("dpkg-query", executor.MockCommandResponse{})
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("apt-get", executortest.MockCommandResponse{})
+	cmd.SetResponse("dpkg-query", executortest.MockCommandResponse{})
 
 	cmd.Run("apt-get", nil, "update")
 	cmd.CombinedOutput("dpkg-query", nil, "-W", "nginx")
@@ -678,8 +675,8 @@ func TestMockCmd_Calls_RecordsRunAndCombinedOutput(t *testing.T) {
 }
 
 func TestMockCmd_Calls_RecordsArgs(t *testing.T) {
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("apt-get", executor.MockCommandResponse{})
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("apt-get", executortest.MockCommandResponse{})
 
 	cmd.Run("apt-get", nil, "install", "-y", "nginx")
 
@@ -693,8 +690,8 @@ func TestMockCmd_Calls_RecordsArgs(t *testing.T) {
 }
 
 func TestMockCmd_Calls_RecordsOpts(t *testing.T) {
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("apt-get", executor.MockCommandResponse{})
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("apt-get", executortest.MockCommandResponse{})
 
 	opts := &executor.CommandOpts{Env: []string{"DEBIAN_FRONTEND=noninteractive"}, Dir: "/tmp"}
 	cmd.Run("apt-get", opts, "install", "nginx")
@@ -712,8 +709,8 @@ func TestMockCmd_Calls_RecordsOpts(t *testing.T) {
 }
 
 func TestMockCmd_Calls_NilOptsRecordedAsNil(t *testing.T) {
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("cmd", executor.MockCommandResponse{})
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("cmd", executortest.MockCommandResponse{})
 
 	cmd.Run("cmd", nil)
 
@@ -724,8 +721,8 @@ func TestMockCmd_Calls_NilOptsRecordedAsNil(t *testing.T) {
 }
 
 func TestMockCmd_Calls_ReturnsACopy(t *testing.T) {
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("apt-get", executor.MockCommandResponse{})
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("apt-get", executortest.MockCommandResponse{})
 	cmd.Run("apt-get", nil)
 
 	calls := cmd.Calls()
@@ -738,7 +735,7 @@ func TestMockCmd_Calls_ReturnsACopy(t *testing.T) {
 }
 
 func TestMockCmd_Calls_EmptyInitially(t *testing.T) {
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 
 	if len(cmd.Calls()) != 0 {
 		t.Errorf("expected 0 calls initially, got %d", len(cmd.Calls()))

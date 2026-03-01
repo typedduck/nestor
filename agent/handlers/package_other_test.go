@@ -4,13 +4,14 @@ import (
 	"testing"
 
 	"github.com/typedduck/nestor/agent/executor"
+	"github.com/typedduck/nestor/agent/executor/executortest"
 	"github.com/typedduck/nestor/playbook"
 )
 
-func unknownPMContext(cmd *executor.MockCommandRunner) *executor.ExecutionContext {
+func unknownPMContext(cmd *executortest.MockCommandRunner) *executor.ExecutionContext {
 	return &executor.ExecutionContext{
 		SystemInfo: &executor.Info{PackageManager: "unknown"},
-		FS:         executor.NewMockFileSystem(),
+		FS:         executortest.NewMockFileSystem(),
 		Cmd:        cmd,
 	}
 }
@@ -33,7 +34,7 @@ func rmAction(packages ...string) playbook.Action {
 
 func TestPackageRemove_MissingPackagesParam(t *testing.T) {
 	h := NewPackageRemoveHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	action := playbook.Action{
 		ID: "test", Type: "package.remove",
 		Params: map[string]any{},
@@ -46,7 +47,7 @@ func TestPackageRemove_MissingPackagesParam(t *testing.T) {
 
 func TestPackageRemove_UnknownPackageManager(t *testing.T) {
 	h := NewPackageRemoveHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	result := h.Execute(rmAction("nginx"), unknownPMContext(cmd))
 	if result.Status != "failed" {
 		t.Fatalf("expected failed, got %s", result.Status)
@@ -55,7 +56,7 @@ func TestPackageRemove_UnknownPackageManager(t *testing.T) {
 
 func TestPackageRemove_DryRun(t *testing.T) {
 	h := NewPackageRemoveHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	ctx := aptContext(cmd)
 	ctx.DryRun = true
 	result := h.Execute(rmAction("nginx"), ctx)
@@ -69,9 +70,9 @@ func TestPackageRemove_DryRun(t *testing.T) {
 
 func TestPackageRemove_PackageNotInstalled(t *testing.T) {
 	h := NewPackageRemoveHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	// dpkg-query fails → package not installed
-	cmd.SetResponse("dpkg-query", executor.MockCommandResponse{ExitCode: 1})
+	cmd.SetResponse("dpkg-query", executortest.MockCommandResponse{ExitCode: 1})
 	result := h.Execute(rmAction("nginx"), aptContext(cmd))
 	if result.Status != "success" {
 		t.Fatalf("expected success, got %s: %s", result.Status, result.Error)
@@ -83,11 +84,11 @@ func TestPackageRemove_PackageNotInstalled(t *testing.T) {
 
 func TestPackageRemove_AptPackageInstalled(t *testing.T) {
 	h := NewPackageRemoveHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("dpkg-query", executor.MockCommandResponse{
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("dpkg-query", executortest.MockCommandResponse{
 		Output: []byte("install ok installed"), ExitCode: 0,
 	})
-	cmd.SetResponse("apt-get", executor.MockCommandResponse{ExitCode: 0})
+	cmd.SetResponse("apt-get", executortest.MockCommandResponse{ExitCode: 0})
 	result := h.Execute(rmAction("nginx"), aptContext(cmd))
 	if result.Status != "success" {
 		t.Fatalf("expected success, got %s: %s", result.Status, result.Error)
@@ -99,11 +100,11 @@ func TestPackageRemove_AptPackageInstalled(t *testing.T) {
 
 func TestPackageRemove_RemoveFails(t *testing.T) {
 	h := NewPackageRemoveHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("dpkg-query", executor.MockCommandResponse{
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("dpkg-query", executortest.MockCommandResponse{
 		Output: []byte("install ok installed"), ExitCode: 0,
 	})
-	cmd.SetResponse("apt-get", executor.MockCommandResponse{
+	cmd.SetResponse("apt-get", executortest.MockCommandResponse{
 		Output: []byte("E: dpkg was interrupted"), ExitCode: 1,
 	})
 	result := h.Execute(rmAction("nginx"), aptContext(cmd))
@@ -114,9 +115,9 @@ func TestPackageRemove_RemoveFails(t *testing.T) {
 
 func TestPackageRemove_YumPackageInstalled(t *testing.T) {
 	h := NewPackageRemoveHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	// yum list installed succeeds → installed; yum remove also succeeds
-	cmd.SetResponse("yum", executor.MockCommandResponse{ExitCode: 0})
+	cmd.SetResponse("yum", executortest.MockCommandResponse{ExitCode: 0})
 	result := h.Execute(rmAction("nginx"), yumContext(cmd))
 	if result.Status != "success" {
 		t.Fatalf("expected success, got %s: %s", result.Status, result.Error)
@@ -133,9 +134,9 @@ func TestPackageRemove_YumPackageInstalled(t *testing.T) {
 
 func TestPackageRemove_YumPackageNotInstalled(t *testing.T) {
 	h := NewPackageRemoveHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	// yum list installed fails → not installed
-	cmd.SetResponse("yum", executor.MockCommandResponse{ExitCode: 1})
+	cmd.SetResponse("yum", executortest.MockCommandResponse{ExitCode: 1})
 	result := h.Execute(rmAction("nginx"), yumContext(cmd))
 	if result.Status != "success" {
 		t.Fatalf("expected success, got %s: %s", result.Status, result.Error)
@@ -152,12 +153,12 @@ func TestPackageRemove_YumPackageNotInstalled(t *testing.T) {
 
 func TestPackageRemove_BrewPackageInstalled(t *testing.T) {
 	h := NewPackageRemoveHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	// Call 0: brew list --formula → exits 0 (installed)
 	// Call 1: brew uninstall → exits 0
 	cmd.SetResponses("brew",
-		executor.MockCommandResponse{ExitCode: 0},
-		executor.MockCommandResponse{ExitCode: 0},
+		executortest.MockCommandResponse{ExitCode: 0},
+		executortest.MockCommandResponse{ExitCode: 0},
 	)
 	result := h.Execute(rmAction("wget"), brewContext(cmd))
 	if result.Status != "success" {
@@ -174,9 +175,9 @@ func TestPackageRemove_BrewPackageInstalled(t *testing.T) {
 
 func TestPackageRemove_BrewPackageNotInstalled(t *testing.T) {
 	h := NewPackageRemoveHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	// brew list --formula → exits 1 (not installed)
-	cmd.SetResponse("brew", executor.MockCommandResponse{ExitCode: 1})
+	cmd.SetResponse("brew", executortest.MockCommandResponse{ExitCode: 1})
 	result := h.Execute(rmAction("wget"), brewContext(cmd))
 	if result.Status != "success" {
 		t.Fatalf("expected success, got %s: %s", result.Status, result.Error)
@@ -192,11 +193,11 @@ func TestPackageRemove_BrewPackageNotInstalled(t *testing.T) {
 
 func TestPackageRemove_BrewRemoveFails(t *testing.T) {
 	h := NewPackageRemoveHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	// Call 0: list → installed; Call 1: uninstall → fails
 	cmd.SetResponses("brew",
-		executor.MockCommandResponse{ExitCode: 0},
-		executor.MockCommandResponse{Output: []byte("uninstall error"), ExitCode: 1},
+		executortest.MockCommandResponse{ExitCode: 0},
+		executortest.MockCommandResponse{Output: []byte("uninstall error"), ExitCode: 1},
 	)
 	result := h.Execute(rmAction("wget"), brewContext(cmd))
 	if result.Status != "failed" {
@@ -208,7 +209,7 @@ func TestPackageRemove_BrewRemoveFails(t *testing.T) {
 
 func TestPackageUpdate_UnknownPackageManager(t *testing.T) {
 	h := NewPackageUpdateHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	action := playbook.Action{ID: "test", Type: "package.update", Params: map[string]any{}}
 	result := h.Execute(action, unknownPMContext(cmd))
 	if result.Status != "failed" {
@@ -218,7 +219,7 @@ func TestPackageUpdate_UnknownPackageManager(t *testing.T) {
 
 func TestPackageUpdate_DryRun(t *testing.T) {
 	h := NewPackageUpdateHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	ctx := aptContext(cmd)
 	ctx.DryRun = true
 	action := playbook.Action{ID: "test", Type: "package.update", Params: map[string]any{}}
@@ -233,8 +234,8 @@ func TestPackageUpdate_DryRun(t *testing.T) {
 
 func TestPackageUpdate_AptSucceeds(t *testing.T) {
 	h := NewPackageUpdateHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("apt-get", executor.MockCommandResponse{ExitCode: 0})
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("apt-get", executortest.MockCommandResponse{ExitCode: 0})
 	action := playbook.Action{ID: "test", Type: "package.update", Params: map[string]any{}}
 	result := h.Execute(action, aptContext(cmd))
 	if result.Status != "success" || !result.Changed {
@@ -244,8 +245,8 @@ func TestPackageUpdate_AptSucceeds(t *testing.T) {
 
 func TestPackageUpdate_AptFails(t *testing.T) {
 	h := NewPackageUpdateHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("apt-get", executor.MockCommandResponse{
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("apt-get", executortest.MockCommandResponse{
 		Output: []byte("E: failed"), ExitCode: 1,
 	})
 	action := playbook.Action{ID: "test", Type: "package.update", Params: map[string]any{}}
@@ -257,8 +258,8 @@ func TestPackageUpdate_AptFails(t *testing.T) {
 
 func TestPackageUpdate_YumExitCode100(t *testing.T) {
 	h := NewPackageUpdateHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("yum", executor.MockCommandResponse{
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("yum", executortest.MockCommandResponse{
 		Output: []byte("updates available"), ExitCode: 100,
 	})
 	action := playbook.Action{ID: "test", Type: "package.update", Params: map[string]any{}}
@@ -270,8 +271,8 @@ func TestPackageUpdate_YumExitCode100(t *testing.T) {
 
 func TestPackageUpdate_DnfExitCode100(t *testing.T) {
 	h := NewPackageUpdateHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("dnf", executor.MockCommandResponse{
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("dnf", executortest.MockCommandResponse{
 		Output: []byte("updates available"), ExitCode: 100,
 	})
 	action := playbook.Action{ID: "test", Type: "package.update", Params: map[string]any{}}
@@ -283,8 +284,8 @@ func TestPackageUpdate_DnfExitCode100(t *testing.T) {
 
 func TestPackageUpdate_BrewSucceeds(t *testing.T) {
 	h := NewPackageUpdateHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("brew", executor.MockCommandResponse{ExitCode: 0})
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("brew", executortest.MockCommandResponse{ExitCode: 0})
 	action := playbook.Action{ID: "test", Type: "package.update", Params: map[string]any{}}
 	result := h.Execute(action, brewContext(cmd))
 	if result.Status != "success" || !result.Changed {
@@ -294,8 +295,8 @@ func TestPackageUpdate_BrewSucceeds(t *testing.T) {
 
 func TestPackageUpdate_BrewFails(t *testing.T) {
 	h := NewPackageUpdateHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("brew", executor.MockCommandResponse{
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("brew", executortest.MockCommandResponse{
 		Output: []byte("update error"), ExitCode: 1,
 	})
 	action := playbook.Action{ID: "test", Type: "package.update", Params: map[string]any{}}
@@ -309,7 +310,7 @@ func TestPackageUpdate_BrewFails(t *testing.T) {
 
 func TestPackageUpgrade_UnknownPackageManager(t *testing.T) {
 	h := NewPackageUpgradeHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	action := playbook.Action{ID: "test", Type: "package.upgrade", Params: map[string]any{}}
 	result := h.Execute(action, unknownPMContext(cmd))
 	if result.Status != "failed" {
@@ -319,7 +320,7 @@ func TestPackageUpgrade_UnknownPackageManager(t *testing.T) {
 
 func TestPackageUpgrade_DryRun(t *testing.T) {
 	h := NewPackageUpgradeHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	ctx := aptContext(cmd)
 	ctx.DryRun = true
 	action := playbook.Action{ID: "test", Type: "package.upgrade", Params: map[string]any{}}
@@ -334,8 +335,8 @@ func TestPackageUpgrade_DryRun(t *testing.T) {
 
 func TestPackageUpgrade_AptSucceeds(t *testing.T) {
 	h := NewPackageUpgradeHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("apt-get", executor.MockCommandResponse{ExitCode: 0})
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("apt-get", executortest.MockCommandResponse{ExitCode: 0})
 	action := playbook.Action{ID: "test", Type: "package.upgrade", Params: map[string]any{}}
 	result := h.Execute(action, aptContext(cmd))
 	if result.Status != "success" || !result.Changed {
@@ -353,8 +354,8 @@ func TestPackageUpgrade_AptSucceeds(t *testing.T) {
 
 func TestPackageUpgrade_AptFails(t *testing.T) {
 	h := NewPackageUpgradeHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("apt-get", executor.MockCommandResponse{
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("apt-get", executortest.MockCommandResponse{
 		Output: []byte("E: error"), ExitCode: 1,
 	})
 	action := playbook.Action{ID: "test", Type: "package.upgrade", Params: map[string]any{}}
@@ -366,8 +367,8 @@ func TestPackageUpgrade_AptFails(t *testing.T) {
 
 func TestPackageUpgrade_YumSucceeds(t *testing.T) {
 	h := NewPackageUpgradeHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("yum", executor.MockCommandResponse{ExitCode: 0})
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("yum", executortest.MockCommandResponse{ExitCode: 0})
 	action := playbook.Action{ID: "test", Type: "package.upgrade", Params: map[string]any{}}
 	result := h.Execute(action, yumContext(cmd))
 	if result.Status != "success" || !result.Changed {
@@ -377,8 +378,8 @@ func TestPackageUpgrade_YumSucceeds(t *testing.T) {
 
 func TestPackageUpgrade_DnfSucceeds(t *testing.T) {
 	h := NewPackageUpgradeHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("dnf", executor.MockCommandResponse{ExitCode: 0})
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("dnf", executortest.MockCommandResponse{ExitCode: 0})
 	action := playbook.Action{ID: "test", Type: "package.upgrade", Params: map[string]any{}}
 	result := h.Execute(action, dnfContext(cmd))
 	if result.Status != "success" || !result.Changed {
@@ -388,8 +389,8 @@ func TestPackageUpgrade_DnfSucceeds(t *testing.T) {
 
 func TestPackageUpgrade_BrewSucceeds(t *testing.T) {
 	h := NewPackageUpgradeHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("brew", executor.MockCommandResponse{ExitCode: 0})
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("brew", executortest.MockCommandResponse{ExitCode: 0})
 	action := playbook.Action{ID: "test", Type: "package.upgrade", Params: map[string]any{}}
 	result := h.Execute(action, brewContext(cmd))
 	if result.Status != "success" || !result.Changed {
@@ -399,8 +400,8 @@ func TestPackageUpgrade_BrewSucceeds(t *testing.T) {
 
 func TestPackageUpgrade_BrewFails(t *testing.T) {
 	h := NewPackageUpgradeHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("brew", executor.MockCommandResponse{
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("brew", executortest.MockCommandResponse{
 		Output: []byte("upgrade error"), ExitCode: 1,
 	})
 	action := playbook.Action{ID: "test", Type: "package.upgrade", Params: map[string]any{}}

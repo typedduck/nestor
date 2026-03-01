@@ -4,31 +4,32 @@ import (
 	"testing"
 
 	"github.com/typedduck/nestor/agent/executor"
+	"github.com/typedduck/nestor/agent/executor/executortest"
 	"github.com/typedduck/nestor/playbook"
 )
 
 // helpers
 
-func systemdContext(cmd *executor.MockCommandRunner) *executor.ExecutionContext {
+func systemdContext(cmd *executortest.MockCommandRunner) *executor.ExecutionContext {
 	return &executor.ExecutionContext{
 		SystemInfo: &executor.Info{InitSystem: "systemd"},
-		FS:         executor.NewMockFileSystem(),
+		FS:         executortest.NewMockFileSystem(),
 		Cmd:        cmd,
 	}
 }
 
-func sysvinitContext(cmd *executor.MockCommandRunner) *executor.ExecutionContext {
+func sysvinitContext(cmd *executortest.MockCommandRunner) *executor.ExecutionContext {
 	return &executor.ExecutionContext{
 		SystemInfo: &executor.Info{InitSystem: "sysvinit"},
-		FS:         executor.NewMockFileSystem(),
+		FS:         executortest.NewMockFileSystem(),
 		Cmd:        cmd,
 	}
 }
 
-func openrcContext(cmd *executor.MockCommandRunner) *executor.ExecutionContext {
+func openrcContext(cmd *executortest.MockCommandRunner) *executor.ExecutionContext {
 	return &executor.ExecutionContext{
 		SystemInfo: &executor.Info{InitSystem: "openrc"},
-		FS:         executor.NewMockFileSystem(),
+		FS:         executortest.NewMockFileSystem(),
 		Cmd:        cmd,
 	}
 }
@@ -42,19 +43,19 @@ func svcAction(name, op string) playbook.Action {
 }
 
 // serviceIsActive helper: sets response for the status check command
-func setSystemdActive(cmd *executor.MockCommandRunner, active bool) {
+func setSystemdActive(cmd *executortest.MockCommandRunner, active bool) {
 	exitCode := 1
 	if active {
 		exitCode = 0
 	}
-	cmd.SetResponse("systemctl", executor.MockCommandResponse{ExitCode: exitCode})
+	cmd.SetResponse("systemctl", executortest.MockCommandResponse{ExitCode: exitCode})
 }
 
 // --- ServiceStartHandler tests ---
 
 func TestServiceStart_MissingName(t *testing.T) {
 	h := NewServiceStartHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	action := playbook.Action{ID: "t", Type: "service.start", Params: map[string]any{}}
 	result := h.Execute(action, systemdContext(cmd))
 	if result.Status != "failed" {
@@ -64,7 +65,7 @@ func TestServiceStart_MissingName(t *testing.T) {
 
 func TestServiceStart_UnknownInitSystem(t *testing.T) {
 	h := NewServiceStartHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	ctx := &executor.ExecutionContext{
 		SystemInfo: &executor.Info{InitSystem: "unknown"},
 		Cmd:        cmd,
@@ -77,7 +78,7 @@ func TestServiceStart_UnknownInitSystem(t *testing.T) {
 
 func TestServiceStart_DryRun(t *testing.T) {
 	h := NewServiceStartHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	ctx := systemdContext(cmd)
 	ctx.DryRun = true
 	result := h.Execute(svcAction("nginx", "start"), ctx)
@@ -91,7 +92,7 @@ func TestServiceStart_DryRun(t *testing.T) {
 
 func TestServiceStart_AlreadyRunning(t *testing.T) {
 	h := NewServiceStartHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	setSystemdActive(cmd, true) // is-active returns 0
 	result := h.Execute(svcAction("nginx", "start"), systemdContext(cmd))
 	if result.Status != "success" {
@@ -109,12 +110,12 @@ func TestServiceStart_AlreadyRunning(t *testing.T) {
 
 func TestServiceStart_NotRunning_StartsService(t *testing.T) {
 	h := NewServiceStartHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	// First call: is-active returns non-zero (not running).
 	// Second call: start returns 0 (success).
 	cmd.SetResponses("systemctl",
-		executor.MockCommandResponse{ExitCode: 1}, // is-active → not active
-		executor.MockCommandResponse{ExitCode: 0}, // start → success
+		executortest.MockCommandResponse{ExitCode: 1}, // is-active → not active
+		executortest.MockCommandResponse{ExitCode: 0}, // start → success
 	)
 	result := h.Execute(svcAction("nginx", "start"), systemdContext(cmd))
 	if result.Status != "success" {
@@ -137,9 +138,9 @@ func TestServiceStart_NotRunning_StartsService(t *testing.T) {
 
 func TestServiceStart_CommandFails(t *testing.T) {
 	h := NewServiceStartHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	// is-active: not running
-	cmd.SetResponse("systemctl", executor.MockCommandResponse{
+	cmd.SetResponse("systemctl", executortest.MockCommandResponse{
 		ExitCode: 1,
 		Output:   []byte("failed"),
 	})
@@ -156,7 +157,7 @@ func TestServiceStart_CommandFails(t *testing.T) {
 
 func TestServiceStop_MissingName(t *testing.T) {
 	h := NewServiceStopHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	action := playbook.Action{ID: "t", Type: "service.stop", Params: map[string]any{}}
 	result := h.Execute(action, systemdContext(cmd))
 	if result.Status != "failed" {
@@ -166,7 +167,7 @@ func TestServiceStop_MissingName(t *testing.T) {
 
 func TestServiceStop_UnknownInitSystem(t *testing.T) {
 	h := NewServiceStopHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	ctx := &executor.ExecutionContext{
 		SystemInfo: &executor.Info{InitSystem: "unknown"},
 		Cmd:        cmd,
@@ -179,7 +180,7 @@ func TestServiceStop_UnknownInitSystem(t *testing.T) {
 
 func TestServiceStop_DryRun(t *testing.T) {
 	h := NewServiceStopHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	ctx := systemdContext(cmd)
 	ctx.DryRun = true
 	result := h.Execute(svcAction("nginx", "stop"), ctx)
@@ -193,7 +194,7 @@ func TestServiceStop_DryRun(t *testing.T) {
 
 func TestServiceStop_AlreadyStopped(t *testing.T) {
 	h := NewServiceStopHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	setSystemdActive(cmd, false) // is-active returns non-zero → stopped
 	result := h.Execute(svcAction("nginx", "stop"), systemdContext(cmd))
 	if result.Status != "success" {
@@ -210,7 +211,7 @@ func TestServiceStop_AlreadyStopped(t *testing.T) {
 
 func TestServiceStop_Running_StopsService(t *testing.T) {
 	h := NewServiceStopHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	setSystemdActive(cmd, true) // is-active returns 0 → running
 	result := h.Execute(svcAction("nginx", "stop"), systemdContext(cmd))
 	if result.Status != "success" {
@@ -232,7 +233,7 @@ func TestServiceStop_Running_StopsService(t *testing.T) {
 
 func TestServiceRestart_MissingName(t *testing.T) {
 	h := NewServiceRestartHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	action := playbook.Action{ID: "t", Type: "service.restart", Params: map[string]any{}}
 	result := h.Execute(action, systemdContext(cmd))
 	if result.Status != "failed" {
@@ -242,7 +243,7 @@ func TestServiceRestart_MissingName(t *testing.T) {
 
 func TestServiceRestart_UnknownInitSystem(t *testing.T) {
 	h := NewServiceRestartHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	ctx := &executor.ExecutionContext{
 		SystemInfo: &executor.Info{InitSystem: "unknown"},
 		Cmd:        cmd,
@@ -255,7 +256,7 @@ func TestServiceRestart_UnknownInitSystem(t *testing.T) {
 
 func TestServiceRestart_DryRun(t *testing.T) {
 	h := NewServiceRestartHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	ctx := systemdContext(cmd)
 	ctx.DryRun = true
 	result := h.Execute(svcAction("nginx", "restart"), ctx)
@@ -269,8 +270,8 @@ func TestServiceRestart_DryRun(t *testing.T) {
 
 func TestServiceRestart_AlwaysActs(t *testing.T) {
 	h := NewServiceRestartHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("systemctl", executor.MockCommandResponse{ExitCode: 0})
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("systemctl", executortest.MockCommandResponse{ExitCode: 0})
 	result := h.Execute(svcAction("nginx", "restart"), systemdContext(cmd))
 	if result.Status != "success" {
 		t.Fatalf("expected success, got %s: %s", result.Status, result.Error)
@@ -289,8 +290,8 @@ func TestServiceRestart_AlwaysActs(t *testing.T) {
 
 func TestServiceRestart_CommandFails(t *testing.T) {
 	h := NewServiceRestartHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("systemctl", executor.MockCommandResponse{
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("systemctl", executortest.MockCommandResponse{
 		ExitCode: 1,
 		Output:   []byte("failed to restart"),
 	})
@@ -304,7 +305,7 @@ func TestServiceRestart_CommandFails(t *testing.T) {
 
 func TestServiceReload_MissingName(t *testing.T) {
 	h := NewServiceReloadHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	action := playbook.Action{ID: "t", Type: "service.reload", Params: map[string]any{}}
 	result := h.Execute(action, systemdContext(cmd))
 	if result.Status != "failed" {
@@ -314,7 +315,7 @@ func TestServiceReload_MissingName(t *testing.T) {
 
 func TestServiceReload_UnknownInitSystem(t *testing.T) {
 	h := NewServiceReloadHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	ctx := &executor.ExecutionContext{
 		SystemInfo: &executor.Info{InitSystem: "unknown"},
 		Cmd:        cmd,
@@ -327,7 +328,7 @@ func TestServiceReload_UnknownInitSystem(t *testing.T) {
 
 func TestServiceReload_DryRun(t *testing.T) {
 	h := NewServiceReloadHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	ctx := systemdContext(cmd)
 	ctx.DryRun = true
 	result := h.Execute(svcAction("nginx", "reload"), ctx)
@@ -341,8 +342,8 @@ func TestServiceReload_DryRun(t *testing.T) {
 
 func TestServiceReload_AlwaysActs(t *testing.T) {
 	h := NewServiceReloadHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("systemctl", executor.MockCommandResponse{ExitCode: 0})
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("systemctl", executortest.MockCommandResponse{ExitCode: 0})
 	result := h.Execute(svcAction("nginx", "reload"), systemdContext(cmd))
 	if result.Status != "success" {
 		t.Fatalf("expected success, got %s: %s", result.Status, result.Error)
@@ -363,12 +364,12 @@ func TestServiceReload_AlwaysActs(t *testing.T) {
 
 func TestServiceStart_Sysvinit(t *testing.T) {
 	h := NewServiceStartHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	// For sysvinit, the command name is the init.d script path.
 	// First call: status → not active (exit 1). Second call: start → success (exit 0).
 	cmd.SetResponses("/etc/init.d/nginx",
-		executor.MockCommandResponse{ExitCode: 1}, // status → not active
-		executor.MockCommandResponse{ExitCode: 0}, // start → success
+		executortest.MockCommandResponse{ExitCode: 1}, // status → not active
+		executortest.MockCommandResponse{ExitCode: 0}, // start → success
 	)
 	result := h.Execute(svcAction("nginx", "start"), sysvinitContext(cmd))
 	if result.Status != "success" || !result.Changed {
@@ -392,9 +393,9 @@ func TestServiceStart_Sysvinit(t *testing.T) {
 
 func TestServiceStop_Openrc(t *testing.T) {
 	h := NewServiceStopHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	// For openrc, status check: rc-service nginx status returns 0 (running)
-	cmd.SetResponse("rc-service", executor.MockCommandResponse{ExitCode: 0})
+	cmd.SetResponse("rc-service", executortest.MockCommandResponse{ExitCode: 0})
 	result := h.Execute(svcAction("nginx", "stop"), openrcContext(cmd))
 	if result.Status != "success" || !result.Changed {
 		t.Fatalf("expected success+changed, got %s changed=%v: %s", result.Status, result.Changed, result.Error)

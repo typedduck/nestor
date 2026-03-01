@@ -4,14 +4,15 @@ import (
 	"testing"
 
 	"github.com/typedduck/nestor/agent/executor"
+	"github.com/typedduck/nestor/agent/executor/executortest"
 	"github.com/typedduck/nestor/playbook"
 )
 
-func dirContext(fs *executor.MockFileSystem) *executor.ExecutionContext {
+func dirContext(fs *executortest.MockFileSystem) *executor.ExecutionContext {
 	return &executor.ExecutionContext{
 		SystemInfo: &executor.Info{},
 		FS:         fs,
-		Cmd:        executor.NewMockCommandRunner(),
+		Cmd:        executortest.NewMockCommandRunner(),
 	}
 }
 
@@ -27,7 +28,7 @@ func dirAction(path string) playbook.Action {
 
 func TestDirectoryCreate_MissingPath(t *testing.T) {
 	h := NewDirectoryCreateHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	action := playbook.Action{
 		ID:     "test",
 		Type:   "directory.create",
@@ -41,7 +42,7 @@ func TestDirectoryCreate_MissingPath(t *testing.T) {
 
 func TestDirectoryCreate_DryRun(t *testing.T) {
 	h := NewDirectoryCreateHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	ctx := dirContext(fs)
 	ctx.DryRun = true
 
@@ -56,7 +57,7 @@ func TestDirectoryCreate_DryRun(t *testing.T) {
 
 func TestDirectoryCreate_DryRunRecursive(t *testing.T) {
 	h := NewDirectoryCreateHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	ctx := dirContext(fs)
 	ctx.DryRun = true
 
@@ -74,7 +75,7 @@ func TestDirectoryCreate_DryRunRecursive(t *testing.T) {
 
 func TestDirectoryCreate_CreatesDirectory(t *testing.T) {
 	h := NewDirectoryCreateHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir("/opt", 0755)
 
 	result := h.Execute(dirAction("/opt/app"), dirContext(fs))
@@ -91,7 +92,7 @@ func TestDirectoryCreate_CreatesDirectory(t *testing.T) {
 
 func TestDirectoryCreate_CreatesDirectoryRecursive(t *testing.T) {
 	h := NewDirectoryCreateHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 
 	action := dirAction("/opt/app/data/logs")
 	action.Params["recursive"] = true
@@ -113,7 +114,7 @@ func TestDirectoryCreate_CreatesDirectoryRecursive(t *testing.T) {
 
 func TestDirectoryCreate_NonRecursiveFailsWithoutParent(t *testing.T) {
 	h := NewDirectoryCreateHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	// No parent dir /opt exists
 
 	result := h.Execute(dirAction("/opt/app"), dirContext(fs))
@@ -124,7 +125,7 @@ func TestDirectoryCreate_NonRecursiveFailsWithoutParent(t *testing.T) {
 
 func TestDirectoryCreate_IdempotentExistingDir(t *testing.T) {
 	h := NewDirectoryCreateHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir("/opt/app", 0755)
 
 	result := h.Execute(dirAction("/opt/app"), dirContext(fs))
@@ -138,7 +139,7 @@ func TestDirectoryCreate_IdempotentExistingDir(t *testing.T) {
 
 func TestDirectoryCreate_FailsWhenPathIsFile(t *testing.T) {
 	h := NewDirectoryCreateHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir("/opt", 0755)
 	fs.AddFile("/opt/app", []byte("i am a file"), 0644)
 
@@ -150,7 +151,7 @@ func TestDirectoryCreate_FailsWhenPathIsFile(t *testing.T) {
 
 func TestDirectoryCreate_CustomMode(t *testing.T) {
 	h := NewDirectoryCreateHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 	fs.AddDir("/opt", 0755)
 
 	action := dirAction("/opt/secret")
@@ -173,7 +174,7 @@ func TestDirectoryCreate_CustomMode(t *testing.T) {
 
 func TestDirectoryCreate_InvalidMode(t *testing.T) {
 	h := NewDirectoryCreateHandler()
-	fs := executor.NewMockFileSystem()
+	fs := executortest.NewMockFileSystem()
 
 	action := dirAction("/opt/app")
 	action.Params["mode"] = "notamode"

@@ -4,10 +4,11 @@ import (
 	"testing"
 
 	"github.com/typedduck/nestor/agent/executor"
+	"github.com/typedduck/nestor/agent/executor/executortest"
 	"github.com/typedduck/nestor/playbook"
 )
 
-func cmdContext(fs *executor.MockFileSystem, cmd *executor.MockCommandRunner) *executor.ExecutionContext {
+func cmdContext(fs *executortest.MockFileSystem, cmd *executortest.MockCommandRunner) *executor.ExecutionContext {
 	return &executor.ExecutionContext{
 		SystemInfo:   &executor.Info{},
 		PlaybookPath: testPlaybookPath,
@@ -20,12 +21,12 @@ func cmdContext(fs *executor.MockFileSystem, cmd *executor.MockCommandRunner) *e
 
 func TestCommandExecute_MissingCommand(t *testing.T) {
 	h := NewCommandExecuteHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	action := playbook.Action{
 		ID: "test", Type: "command.execute",
 		Params: map[string]any{},
 	}
-	result := h.Execute(action, cmdContext(executor.NewMockFileSystem(), cmd))
+	result := h.Execute(action, cmdContext(executortest.NewMockFileSystem(), cmd))
 	if result.Status != "failed" {
 		t.Fatalf("expected failed, got %s", result.Status)
 	}
@@ -33,8 +34,8 @@ func TestCommandExecute_MissingCommand(t *testing.T) {
 
 func TestCommandExecute_DryRun(t *testing.T) {
 	h := NewCommandExecuteHandler()
-	cmd := executor.NewMockCommandRunner()
-	ctx := cmdContext(executor.NewMockFileSystem(), cmd)
+	cmd := executortest.NewMockCommandRunner()
+	ctx := cmdContext(executortest.NewMockFileSystem(), cmd)
 	ctx.DryRun = true
 	action := playbook.Action{
 		ID: "test", Type: "command.execute",
@@ -51,8 +52,8 @@ func TestCommandExecute_DryRun(t *testing.T) {
 
 func TestCommandExecute_CreatesExistsSkips(t *testing.T) {
 	h := NewCommandExecuteHandler()
-	cmd := executor.NewMockCommandRunner()
-	fs := executor.NewMockFileSystem()
+	cmd := executortest.NewMockCommandRunner()
+	fs := executortest.NewMockFileSystem()
 	fs.AddFile("/tmp/done", []byte{}, 0644)
 
 	action := playbook.Action{
@@ -76,10 +77,10 @@ func TestCommandExecute_CreatesExistsSkips(t *testing.T) {
 
 func TestCommandExecute_CreatesNotExistsRuns(t *testing.T) {
 	h := NewCommandExecuteHandler()
-	cmd := executor.NewMockCommandRunner()
-	fs := executor.NewMockFileSystem()
+	cmd := executortest.NewMockCommandRunner()
+	fs := executortest.NewMockFileSystem()
 	// creates path does not exist
-	cmd.SetResponse("/bin/sh", executor.MockCommandResponse{ExitCode: 0})
+	cmd.SetResponse("/bin/sh", executortest.MockCommandResponse{ExitCode: 0})
 
 	action := playbook.Action{
 		ID: "test", Type: "command.execute",
@@ -103,14 +104,14 @@ func TestCommandExecute_CreatesNotExistsRuns(t *testing.T) {
 
 func TestCommandExecute_Succeeds(t *testing.T) {
 	h := NewCommandExecuteHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("/bin/sh", executor.MockCommandResponse{ExitCode: 0})
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("/bin/sh", executortest.MockCommandResponse{ExitCode: 0})
 
 	action := playbook.Action{
 		ID: "test", Type: "command.execute",
 		Params: map[string]any{"command": "echo hello"},
 	}
-	result := h.Execute(action, cmdContext(executor.NewMockFileSystem(), cmd))
+	result := h.Execute(action, cmdContext(executortest.NewMockFileSystem(), cmd))
 	if result.Status != "success" || !result.Changed {
 		t.Fatalf("expected success+changed, got %s changed=%v", result.Status, result.Changed)
 	}
@@ -129,8 +130,8 @@ func TestCommandExecute_Succeeds(t *testing.T) {
 
 func TestCommandExecute_Fails(t *testing.T) {
 	h := NewCommandExecuteHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("/bin/sh", executor.MockCommandResponse{
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("/bin/sh", executortest.MockCommandResponse{
 		Output: []byte("error output"), ExitCode: 1,
 	})
 
@@ -138,7 +139,7 @@ func TestCommandExecute_Fails(t *testing.T) {
 		ID: "test", Type: "command.execute",
 		Params: map[string]any{"command": "false"},
 	}
-	result := h.Execute(action, cmdContext(executor.NewMockFileSystem(), cmd))
+	result := h.Execute(action, cmdContext(executortest.NewMockFileSystem(), cmd))
 	if result.Status != "failed" {
 		t.Fatalf("expected failed, got %s", result.Status)
 	}
@@ -146,8 +147,8 @@ func TestCommandExecute_Fails(t *testing.T) {
 
 func TestCommandExecute_WithEnv(t *testing.T) {
 	h := NewCommandExecuteHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("/bin/sh", executor.MockCommandResponse{ExitCode: 0})
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("/bin/sh", executortest.MockCommandResponse{ExitCode: 0})
 
 	action := playbook.Action{
 		ID: "test", Type: "command.execute",
@@ -156,7 +157,7 @@ func TestCommandExecute_WithEnv(t *testing.T) {
 			"env":     []any{"MY_VAR=hello"},
 		},
 	}
-	result := h.Execute(action, cmdContext(executor.NewMockFileSystem(), cmd))
+	result := h.Execute(action, cmdContext(executortest.NewMockFileSystem(), cmd))
 	if result.Status != "success" {
 		t.Fatalf("expected success, got %s: %s", result.Status, result.Error)
 	}
@@ -170,12 +171,12 @@ func TestCommandExecute_WithEnv(t *testing.T) {
 
 func TestScriptExecute_MissingSource(t *testing.T) {
 	h := NewScriptExecuteHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	action := playbook.Action{
 		ID: "test", Type: "script.execute",
 		Params: map[string]any{},
 	}
-	result := h.Execute(action, cmdContext(executor.NewMockFileSystem(), cmd))
+	result := h.Execute(action, cmdContext(executortest.NewMockFileSystem(), cmd))
 	if result.Status != "failed" {
 		t.Fatalf("expected failed, got %s", result.Status)
 	}
@@ -183,8 +184,8 @@ func TestScriptExecute_MissingSource(t *testing.T) {
 
 func TestScriptExecute_DryRun(t *testing.T) {
 	h := NewScriptExecuteHandler()
-	cmd := executor.NewMockCommandRunner()
-	ctx := cmdContext(executor.NewMockFileSystem(), cmd)
+	cmd := executortest.NewMockCommandRunner()
+	ctx := cmdContext(executortest.NewMockFileSystem(), cmd)
 	ctx.DryRun = true
 	action := playbook.Action{
 		ID: "test", Type: "script.execute",
@@ -201,8 +202,8 @@ func TestScriptExecute_DryRun(t *testing.T) {
 
 func TestScriptExecute_CreatesExistsSkips(t *testing.T) {
 	h := NewScriptExecuteHandler()
-	cmd := executor.NewMockCommandRunner()
-	fs := executor.NewMockFileSystem()
+	cmd := executortest.NewMockCommandRunner()
+	fs := executortest.NewMockFileSystem()
 	fs.AddFile("/etc/app/setup.done", []byte{}, 0644)
 
 	action := playbook.Action{
@@ -226,14 +227,14 @@ func TestScriptExecute_CreatesExistsSkips(t *testing.T) {
 
 func TestScriptExecute_Succeeds(t *testing.T) {
 	h := NewScriptExecuteHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("/bin/sh", executor.MockCommandResponse{ExitCode: 0})
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("/bin/sh", executortest.MockCommandResponse{ExitCode: 0})
 
 	action := playbook.Action{
 		ID: "test", Type: "script.execute",
 		Params: map[string]any{"source": "upload/setup.sh"},
 	}
-	result := h.Execute(action, cmdContext(executor.NewMockFileSystem(), cmd))
+	result := h.Execute(action, cmdContext(executortest.NewMockFileSystem(), cmd))
 	if result.Status != "success" || !result.Changed {
 		t.Fatalf("expected success+changed, got %s changed=%v", result.Status, result.Changed)
 	}
@@ -250,8 +251,8 @@ func TestScriptExecute_Succeeds(t *testing.T) {
 
 func TestScriptExecute_WithArgs(t *testing.T) {
 	h := NewScriptExecuteHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("/bin/sh", executor.MockCommandResponse{ExitCode: 0})
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("/bin/sh", executortest.MockCommandResponse{ExitCode: 0})
 
 	action := playbook.Action{
 		ID: "test", Type: "script.execute",
@@ -260,7 +261,7 @@ func TestScriptExecute_WithArgs(t *testing.T) {
 			"args":   []any{"--verbose", "--force"},
 		},
 	}
-	result := h.Execute(action, cmdContext(executor.NewMockFileSystem(), cmd))
+	result := h.Execute(action, cmdContext(executortest.NewMockFileSystem(), cmd))
 	if result.Status != "success" {
 		t.Fatalf("expected success, got %s: %s", result.Status, result.Error)
 	}
@@ -273,8 +274,8 @@ func TestScriptExecute_WithArgs(t *testing.T) {
 
 func TestScriptExecute_Fails(t *testing.T) {
 	h := NewScriptExecuteHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("/bin/sh", executor.MockCommandResponse{
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("/bin/sh", executortest.MockCommandResponse{
 		Output: []byte("script error"), ExitCode: 1,
 	})
 
@@ -282,7 +283,7 @@ func TestScriptExecute_Fails(t *testing.T) {
 		ID: "test", Type: "script.execute",
 		Params: map[string]any{"source": "upload/setup.sh"},
 	}
-	result := h.Execute(action, cmdContext(executor.NewMockFileSystem(), cmd))
+	result := h.Execute(action, cmdContext(executortest.NewMockFileSystem(), cmd))
 	if result.Status != "failed" {
 		t.Fatalf("expected failed, got %s", result.Status)
 	}

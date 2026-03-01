@@ -4,37 +4,38 @@ import (
 	"testing"
 
 	"github.com/typedduck/nestor/agent/executor"
+	"github.com/typedduck/nestor/agent/executor/executortest"
 	"github.com/typedduck/nestor/playbook"
 )
 
-func aptContext(cmd *executor.MockCommandRunner) *executor.ExecutionContext {
+func aptContext(cmd *executortest.MockCommandRunner) *executor.ExecutionContext {
 	return &executor.ExecutionContext{
 		SystemInfo: &executor.Info{PackageManager: "apt"},
-		FS:         executor.NewMockFileSystem(),
+		FS:         executortest.NewMockFileSystem(),
 		Cmd:        cmd,
 	}
 }
 
-func yumContext(cmd *executor.MockCommandRunner) *executor.ExecutionContext {
+func yumContext(cmd *executortest.MockCommandRunner) *executor.ExecutionContext {
 	return &executor.ExecutionContext{
 		SystemInfo: &executor.Info{PackageManager: "yum"},
-		FS:         executor.NewMockFileSystem(),
+		FS:         executortest.NewMockFileSystem(),
 		Cmd:        cmd,
 	}
 }
 
-func dnfContext(cmd *executor.MockCommandRunner) *executor.ExecutionContext {
+func dnfContext(cmd *executortest.MockCommandRunner) *executor.ExecutionContext {
 	return &executor.ExecutionContext{
 		SystemInfo: &executor.Info{PackageManager: "dnf"},
-		FS:         executor.NewMockFileSystem(),
+		FS:         executortest.NewMockFileSystem(),
 		Cmd:        cmd,
 	}
 }
 
-func brewContext(cmd *executor.MockCommandRunner) *executor.ExecutionContext {
+func brewContext(cmd *executortest.MockCommandRunner) *executor.ExecutionContext {
 	return &executor.ExecutionContext{
 		SystemInfo: &executor.Info{PackageManager: "brew"},
-		FS:         executor.NewMockFileSystem(),
+		FS:         executortest.NewMockFileSystem(),
 		Cmd:        cmd,
 	}
 }
@@ -55,7 +56,7 @@ func pkgAction(packages ...string) playbook.Action {
 
 func TestPackageInstall_MissingPackagesParam(t *testing.T) {
 	h := NewPackageInstallHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	action := playbook.Action{
 		ID:     "test",
 		Type:   "package.install",
@@ -69,7 +70,7 @@ func TestPackageInstall_MissingPackagesParam(t *testing.T) {
 
 func TestPackageInstall_InvalidPackagesType(t *testing.T) {
 	h := NewPackageInstallHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	action := playbook.Action{
 		ID:   "test",
 		Type: "package.install",
@@ -85,7 +86,7 @@ func TestPackageInstall_InvalidPackagesType(t *testing.T) {
 
 func TestPackageInstall_EmptyPackages(t *testing.T) {
 	h := NewPackageInstallHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	action := playbook.Action{
 		ID:   "test",
 		Type: "package.install",
@@ -104,7 +105,7 @@ func TestPackageInstall_EmptyPackages(t *testing.T) {
 
 func TestPackageInstall_UnknownPackageManager(t *testing.T) {
 	h := NewPackageInstallHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	ctx := &executor.ExecutionContext{
 		SystemInfo: &executor.Info{PackageManager: "unknown"},
 		Cmd:        cmd,
@@ -117,7 +118,7 @@ func TestPackageInstall_UnknownPackageManager(t *testing.T) {
 
 func TestPackageInstall_DryRun(t *testing.T) {
 	h := NewPackageInstallHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	ctx := aptContext(cmd)
 	ctx.DryRun = true
 	result := h.Execute(pkgAction("nginx"), ctx)
@@ -131,8 +132,8 @@ func TestPackageInstall_DryRun(t *testing.T) {
 
 func TestPackageInstall_AptAllAlreadyInstalled(t *testing.T) {
 	h := NewPackageInstallHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("dpkg-query", executor.MockCommandResponse{
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("dpkg-query", executortest.MockCommandResponse{
 		Output: []byte("install ok installed"), ExitCode: 0,
 	})
 	result := h.Execute(pkgAction("nginx"), aptContext(cmd))
@@ -146,13 +147,13 @@ func TestPackageInstall_AptAllAlreadyInstalled(t *testing.T) {
 
 func TestPackageInstall_AptInstallsNewPackage(t *testing.T) {
 	h := NewPackageInstallHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	// dpkg-query fails → package not installed
-	cmd.SetResponse("dpkg-query", executor.MockCommandResponse{
+	cmd.SetResponse("dpkg-query", executortest.MockCommandResponse{
 		Output: []byte(""), ExitCode: 1, Err: nil,
 	})
 	// apt-get update succeeds
-	cmd.SetResponse("apt-get", executor.MockCommandResponse{
+	cmd.SetResponse("apt-get", executortest.MockCommandResponse{
 		Output: []byte(""), ExitCode: 0,
 	})
 
@@ -183,11 +184,11 @@ func TestPackageInstall_AptInstallsNewPackage(t *testing.T) {
 
 func TestPackageInstall_AptSkipUpdateCache(t *testing.T) {
 	h := NewPackageInstallHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("dpkg-query", executor.MockCommandResponse{
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("dpkg-query", executortest.MockCommandResponse{
 		Output: []byte(""), ExitCode: 1,
 	})
-	cmd.SetResponse("apt-get", executor.MockCommandResponse{
+	cmd.SetResponse("apt-get", executortest.MockCommandResponse{
 		Output: []byte(""), ExitCode: 0,
 	})
 
@@ -208,8 +209,8 @@ func TestPackageInstall_AptSkipUpdateCache(t *testing.T) {
 
 func TestPackageInstall_YumCheckUpdateExitCode100(t *testing.T) {
 	h := NewPackageInstallHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("yum", executor.MockCommandResponse{
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("yum", executortest.MockCommandResponse{
 		Output: []byte("updates available"), ExitCode: 100,
 	})
 
@@ -221,8 +222,8 @@ func TestPackageInstall_YumCheckUpdateExitCode100(t *testing.T) {
 
 func TestPackageInstall_DnfCheckUpdateExitCode100(t *testing.T) {
 	h := NewPackageInstallHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("dnf", executor.MockCommandResponse{
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("dnf", executortest.MockCommandResponse{
 		Output: []byte("updates available"), ExitCode: 100,
 	})
 	err := h.updateCache(cmd, "dnf")
@@ -233,10 +234,10 @@ func TestPackageInstall_DnfCheckUpdateExitCode100(t *testing.T) {
 
 func TestPackageInstall_UnsupportedPM(t *testing.T) {
 	h := NewPackageInstallHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	ctx := &executor.ExecutionContext{
 		SystemInfo: &executor.Info{PackageManager: "pacman"},
-		FS:         executor.NewMockFileSystem(),
+		FS:         executortest.NewMockFileSystem(),
 		Cmd:        cmd,
 	}
 	result := h.Execute(pkgAction("nginx"), ctx)
@@ -247,11 +248,11 @@ func TestPackageInstall_UnsupportedPM(t *testing.T) {
 
 func TestPackageInstall_UpdateCacheFails(t *testing.T) {
 	h := NewPackageInstallHandler()
-	cmd := executor.NewMockCommandRunner()
-	cmd.SetResponse("dpkg-query", executor.MockCommandResponse{
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("dpkg-query", executortest.MockCommandResponse{
 		Output: []byte(""), ExitCode: 1,
 	})
-	cmd.SetResponse("apt-get", executor.MockCommandResponse{
+	cmd.SetResponse("apt-get", executortest.MockCommandResponse{
 		Output: []byte("E: Could not get lock"), ExitCode: 100,
 	})
 
@@ -263,9 +264,9 @@ func TestPackageInstall_UpdateCacheFails(t *testing.T) {
 
 func TestPackageInstall_YumPackageAlreadyInstalled(t *testing.T) {
 	h := NewPackageInstallHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	// yum list installed succeeds → package is installed
-	cmd.SetResponse("yum", executor.MockCommandResponse{
+	cmd.SetResponse("yum", executortest.MockCommandResponse{
 		Output: []byte("nginx.x86_64  1:1.20.1-1.el7  @base"), ExitCode: 0,
 	})
 
@@ -280,12 +281,12 @@ func TestPackageInstall_YumPackageAlreadyInstalled(t *testing.T) {
 
 func TestPackageInstall_MultiplePackagesSomeInstalled(t *testing.T) {
 	h := NewPackageInstallHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 
 	// dpkg-query returns "install ok installed" for all queries (executor keyed by name).
 	// To test partial install, we'd need per-call responses. Instead, test that
 	// when all are installed, no install happens.
-	cmd.SetResponse("dpkg-query", executor.MockCommandResponse{
+	cmd.SetResponse("dpkg-query", executortest.MockCommandResponse{
 		Output: []byte("install ok installed"), ExitCode: 0,
 	})
 
@@ -300,9 +301,9 @@ func TestPackageInstall_MultiplePackagesSomeInstalled(t *testing.T) {
 
 func TestPackageInstall_BrewAlreadyInstalled(t *testing.T) {
 	h := NewPackageInstallHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	// brew list --formula succeeds → already installed
-	cmd.SetResponse("brew", executor.MockCommandResponse{ExitCode: 0})
+	cmd.SetResponse("brew", executortest.MockCommandResponse{ExitCode: 0})
 
 	result := h.Execute(pkgAction("wget"), brewContext(cmd))
 	if result.Status != "success" {
@@ -319,14 +320,14 @@ func TestPackageInstall_BrewAlreadyInstalled(t *testing.T) {
 
 func TestPackageInstall_BrewInstallsNewPackage(t *testing.T) {
 	h := NewPackageInstallHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	// Call 0: brew list --formula → exits 1 (not installed)
 	// Call 1: brew update → exits 0
 	// Call 2: brew install → exits 0
 	cmd.SetResponses("brew",
-		executor.MockCommandResponse{ExitCode: 1},
-		executor.MockCommandResponse{ExitCode: 0},
-		executor.MockCommandResponse{ExitCode: 0},
+		executortest.MockCommandResponse{ExitCode: 1},
+		executortest.MockCommandResponse{ExitCode: 0},
+		executortest.MockCommandResponse{ExitCode: 0},
 	)
 
 	result := h.Execute(pkgAction("wget"), brewContext(cmd))
@@ -351,11 +352,11 @@ func TestPackageInstall_BrewInstallsNewPackage(t *testing.T) {
 
 func TestPackageInstall_BrewUpdateFails(t *testing.T) {
 	h := NewPackageInstallHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	// Call 0: brew list --formula → not installed; Call 1: brew update → fails
 	cmd.SetResponses("brew",
-		executor.MockCommandResponse{ExitCode: 1},
-		executor.MockCommandResponse{Output: []byte("update error"), ExitCode: 1},
+		executortest.MockCommandResponse{ExitCode: 1},
+		executortest.MockCommandResponse{Output: []byte("update error"), ExitCode: 1},
 	)
 
 	result := h.Execute(pkgAction("wget"), brewContext(cmd))
@@ -366,12 +367,12 @@ func TestPackageInstall_BrewUpdateFails(t *testing.T) {
 
 func TestPackageInstall_BrewInstallFails(t *testing.T) {
 	h := NewPackageInstallHandler()
-	cmd := executor.NewMockCommandRunner()
+	cmd := executortest.NewMockCommandRunner()
 	// Call 0: list → not installed; Call 1: update → ok; Call 2: install → fails
 	cmd.SetResponses("brew",
-		executor.MockCommandResponse{ExitCode: 1},
-		executor.MockCommandResponse{ExitCode: 0},
-		executor.MockCommandResponse{Output: []byte("install error"), ExitCode: 1},
+		executortest.MockCommandResponse{ExitCode: 1},
+		executortest.MockCommandResponse{ExitCode: 0},
+		executortest.MockCommandResponse{Output: []byte("install error"), ExitCode: 1},
 	)
 
 	result := h.Execute(pkgAction("wget"), brewContext(cmd))

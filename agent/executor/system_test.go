@@ -5,11 +5,12 @@ import (
 	"testing"
 
 	"github.com/typedduck/nestor/agent/executor"
+	"github.com/typedduck/nestor/agent/executor/executortest"
 )
 
 func TestDetectSystem_BasicFields(t *testing.T) {
-	fr := executor.NewMockFileSystem()
-	cl := executor.NewMockCommandRunner()
+	fr := executortest.NewMockFileSystem()
+	cl := executortest.NewMockCommandRunner()
 	info := executor.DetectSystem(fr, cl)
 
 	if info.OS != runtime.GOOS {
@@ -29,7 +30,7 @@ func TestDetectSystem_NilDefaults(t *testing.T) {
 }
 
 func TestDetectDistribution_Ubuntu(t *testing.T) {
-	fr := executor.NewMockFileSystem()
+	fr := executortest.NewMockFileSystem()
 	fr.AddFile("/etc/os-release",
 		[]byte("NAME=\"Ubuntu\"\nID=ubuntu\nVERSION_ID=\"22.04\"\n"), 0755)
 
@@ -40,7 +41,7 @@ func TestDetectDistribution_Ubuntu(t *testing.T) {
 }
 
 func TestDetectDistribution_QuotedID(t *testing.T) {
-	fr := executor.NewMockFileSystem()
+	fr := executortest.NewMockFileSystem()
 	fr.AddFile("/etc/os-release", []byte("ID=\"centos\"\n"), 0755)
 
 	distro := executor.DetectDistribution(fr)
@@ -50,7 +51,7 @@ func TestDetectDistribution_QuotedID(t *testing.T) {
 }
 
 func TestDetectDistribution_FallbackDebian(t *testing.T) {
-	fr := executor.NewMockFileSystem()
+	fr := executortest.NewMockFileSystem()
 	// No os-release, but debian_version exists
 	fr.AddFile("/etc/debian_version", []byte("11.0"), 0755)
 
@@ -61,7 +62,7 @@ func TestDetectDistribution_FallbackDebian(t *testing.T) {
 }
 
 func TestDetectDistribution_FallbackRedhat(t *testing.T) {
-	fr := executor.NewMockFileSystem()
+	fr := executortest.NewMockFileSystem()
 	fr.AddFile("/etc/redhat-release", []byte("CentOS Linux release 7.9"), 0755)
 
 	distro := executor.DetectDistribution(fr)
@@ -71,7 +72,7 @@ func TestDetectDistribution_FallbackRedhat(t *testing.T) {
 }
 
 func TestDetectDistribution_Unknown(t *testing.T) {
-	fr := executor.NewMockFileSystem()
+	fr := executortest.NewMockFileSystem()
 	distro := executor.DetectDistribution(fr)
 	if distro != "unknown" {
 		t.Fatalf("expected unknown, got %s", distro)
@@ -79,7 +80,7 @@ func TestDetectDistribution_Unknown(t *testing.T) {
 }
 
 func TestDetectPackageManager_Apt(t *testing.T) {
-	cl := executor.NewMockCommandRunner()
+	cl := executortest.NewMockCommandRunner()
 	cl.SetLookPath("apt-get", "/usr/bin/apt-get")
 
 	pm := executor.DetectPackageManager(cl)
@@ -89,7 +90,7 @@ func TestDetectPackageManager_Apt(t *testing.T) {
 }
 
 func TestDetectPackageManager_Dnf(t *testing.T) {
-	cl := executor.NewMockCommandRunner()
+	cl := executortest.NewMockCommandRunner()
 	cl.SetLookPath("dnf", "/usr/bin/dnf")
 
 	pm := executor.DetectPackageManager(cl)
@@ -99,7 +100,7 @@ func TestDetectPackageManager_Dnf(t *testing.T) {
 }
 
 func TestDetectPackageManager_Priority(t *testing.T) {
-	cl := executor.NewMockCommandRunner()
+	cl := executortest.NewMockCommandRunner()
 	// Both yum and dnf available; apt-get takes priority
 	cl.SetLookPath("apt-get", "/usr/bin/apt-get")
 	cl.SetLookPath("yum", "/usr/bin/yum")
@@ -112,7 +113,7 @@ func TestDetectPackageManager_Priority(t *testing.T) {
 }
 
 func TestDetectPackageManager_Unknown(t *testing.T) {
-	cl := executor.NewMockCommandRunner()
+	cl := executortest.NewMockCommandRunner()
 	pm := executor.DetectPackageManager(cl)
 	if pm != "unknown" {
 		t.Fatalf("expected unknown, got %s", pm)
@@ -120,8 +121,8 @@ func TestDetectPackageManager_Unknown(t *testing.T) {
 }
 
 func TestDetectInitSystem_Systemd(t *testing.T) {
-	fr := executor.NewMockFileSystem()
-	cl := executor.NewMockCommandRunner()
+	fr := executortest.NewMockFileSystem()
+	cl := executortest.NewMockCommandRunner()
 	cl.SetLookPath("systemctl", "/usr/bin/systemctl")
 
 	init := executor.DetectInitSystem(fr, cl)
@@ -131,9 +132,9 @@ func TestDetectInitSystem_Systemd(t *testing.T) {
 }
 
 func TestDetectInitSystem_SysVInit(t *testing.T) {
-	fr := executor.NewMockFileSystem()
+	fr := executortest.NewMockFileSystem()
 	fr.AddFile("/etc/init.d", []byte{}, 0755)
-	cl := executor.NewMockCommandRunner()
+	cl := executortest.NewMockCommandRunner()
 
 	init := executor.DetectInitSystem(fr, cl)
 	if init != "sysvinit" {
@@ -142,8 +143,8 @@ func TestDetectInitSystem_SysVInit(t *testing.T) {
 }
 
 func TestDetectInitSystem_OpenRC(t *testing.T) {
-	fr := executor.NewMockFileSystem()
-	cl := executor.NewMockCommandRunner()
+	fr := executortest.NewMockFileSystem()
+	cl := executortest.NewMockCommandRunner()
 	cl.SetLookPath("rc-service", "/sbin/rc-service")
 
 	init := executor.DetectInitSystem(fr, cl)
@@ -153,8 +154,8 @@ func TestDetectInitSystem_OpenRC(t *testing.T) {
 }
 
 func TestDetectInitSystem_Unknown(t *testing.T) {
-	fr := executor.NewMockFileSystem()
-	cl := executor.NewMockCommandRunner()
+	fr := executortest.NewMockFileSystem()
+	cl := executortest.NewMockCommandRunner()
 	init := executor.DetectInitSystem(fr, cl)
 	if init != "unknown" {
 		t.Fatalf("expected unknown, got %s", init)
@@ -162,7 +163,7 @@ func TestDetectInitSystem_Unknown(t *testing.T) {
 }
 
 func TestGetFileInfo_Exists(t *testing.T) {
-	fr := executor.NewMockFileSystem()
+	fr := executortest.NewMockFileSystem()
 	fr.AddFile("/etc/test.conf", []byte("hello"), 0755)
 
 	info, err := executor.GetFileInfo(fr, "/etc/test.conf")
@@ -178,7 +179,7 @@ func TestGetFileInfo_Exists(t *testing.T) {
 }
 
 func TestGetFileInfo_NotExists(t *testing.T) {
-	fr := executor.NewMockFileSystem()
+	fr := executortest.NewMockFileSystem()
 	info, err := executor.GetFileInfo(fr, "/nonexistent")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
