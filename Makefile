@@ -42,22 +42,21 @@ build: build-controller build-agent
 build-controller:
 	@echo "Building controller..."
 	@mkdir -p $(BUILD_DIR)
-	$(GO) build $(GOFLAGS) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/controller/main.go
+	$(GO) build $(GOFLAGS) $(LDFLAGS) -o $(BUILD_DIR) ./cmd/$(BINARY_NAME)
 
 # Build agent
 build-agent:
-	@echo "Building agent for native platform..."
 	@mkdir -p $(BUILD_DIR)
-	$(GO) build $(GOFLAGS) $(LDFLAGS) \
-	-o $(BUILD_DIR)/$(AGENT_BINARY) ./cmd/agent/main.go
+	@echo "Building agent for native platform..."
+	$(GO) build $(GOFLAGS) $(LDFLAGS) -o $(BUILD_DIR) ./cmd/$(AGENT_BINARY)
 	@echo "Building agent for Linux on amd64..."
 	GOOS=linux GOARCH=amd64 \
 	$(GO) build $(GOFLAGS) $(LDFLAGS) \
-	-o $(BUILD_DIR)/$(AGENT_BINARY)-linux-amd64 ./cmd/agent/main.go
+	-o $(BUILD_DIR)/$(AGENT_BINARY)-linux-amd64 ./cmd/$(AGENT_BINARY)
 	@echo "Building agent for Linux on arm64..."
 	GOOS=linux GOARCH=arm64 \
 	$(GO) build $(GOFLAGS) $(LDFLAGS) \
-	-o $(BUILD_DIR)/$(AGENT_BINARY)-linux-arm64 ./cmd/agent/main.go
+	-o $(BUILD_DIR)/$(AGENT_BINARY)-linux-arm64 ./cmd/$(AGENT_BINARY)
 
 # Run all tests
 test:
@@ -102,10 +101,9 @@ clean:
 	rm -f coverage.out coverage.html
 
 # Install binaries
-install: build
+install:
 	@echo "Installing binaries..."
-	$(GO) install ./cmd/controller
-	$(GO) install ./cmd/agent
+	$(GO) install $(GOFLAGS) $(LDFLAGS) ./cmd/...
 
 # Development helpers
 fmt:
