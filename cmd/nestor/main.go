@@ -14,15 +14,17 @@ import (
 )
 
 const (
-	Version        = "dev"
-	ControllerName = "nestor"
+	Version                = "dev"
+	ControllerName         = "nestor"
+	DefaultAgentPath       = "./build/nestor-agent"
+	DefaultRemoteAgentPath = "/usr/local/bin/nestor-agent"
 )
 
 // Command represents a CLI command
 type Command struct {
 	Name        string
 	Description string
-	Execute     func(args []string) error
+	Execute     func(cfg *Config, args []string) error
 }
 
 var commands = []Command{
@@ -68,12 +70,17 @@ func main() {
 		os.Exit(1)
 	}
 
+	cfg, err := loadConfig()
+	if err != nil {
+		log.Fatalf("config: %v", err)
+	}
+
 	cmdName := os.Args[1]
 
 	// Find and execute command
 	for _, cmd := range commands {
 		if cmd.Name == cmdName {
-			if err := cmd.Execute(os.Args[2:]); err != nil {
+			if err := cmd.Execute(cfg, os.Args[2:]); err != nil {
 				log.Fatalf("Error: %v", err)
 			}
 			return
@@ -97,15 +104,15 @@ func printUsage() {
 }
 
 // cmdApply loads a YAML playbook and deploys it to a remote host.
-func cmdApply(args []string) error {
+func cmdApply(cfg *Config, args []string) error {
 	fs := flag.NewFlagSet("apply", flag.ExitOnError)
 
 	var vars varFlags
 	fs.Var(&vars, "var", "Set a playbook variable (key=value), may be repeated")
-	sshKey := fs.String("ssh-key", os.Getenv("HOME")+"/.ssh/id_ed25519", "SSH private key")
-	signingKey := fs.String("signing-key", "", "Signing key (defaults to SSH key)")
-	knownHosts := fs.String("known-hosts", os.Getenv("HOME")+"/.ssh/known_hosts", "known_hosts file")
-	dryRun := fs.Bool("dry-run", false, "Package and sign without deploying")
+	sshKey := fs.String("ssh-key", cfg.resolveSSHKey("apply"), "SSH private key")
+	signingKey := fs.String("signing-key", cfg.resolveSigningKey("apply"), "Signing key (defaults to SSH key)")
+	knownHosts := fs.String("known-hosts", cfg.resolveKnownHosts("apply"), "known_hosts file")
+	dryRun := fs.Bool("dry-run", resolveBool(cfg.Apply.DryRun), "Package and sign without deploying")
 
 	fs.Parse(args)
 
@@ -122,11 +129,11 @@ func cmdApply(args []string) error {
 	// Parse -var flags into a map; CLI vars override YAML vars.
 	varMap := make(map[string]string, len(vars))
 	for _, kv := range vars {
-		idx := strings.IndexByte(kv, '=')
-		if idx < 0 {
+		before, after, ok := strings.Cut(kv, "=")
+		if !ok {
 			return fmt.Errorf("-var %q must be in key=value form", kv)
 		}
-		varMap[kv[:idx]] = kv[idx+1:]
+		varMap[before] = after
 	}
 
 	data, err := os.ReadFile(playbookFile)
@@ -153,12 +160,12 @@ func cmdApply(args []string) error {
 // cmdLocal loads a YAML playbook from a directory and executes it locally.
 // The directory must contain playbook.yaml; uploads/ is the default upload root.
 // Run with sudo on Linux or when writing to system paths on macOS.
-func cmdLocal(args []string) error {
+func cmdLocal(cfg *Config, args []string) error {
 	fs := flag.NewFlagSet("local", flag.ExitOnError)
 
 	var vars varFlags
 	fs.Var(&vars, "var", "Set a playbook variable (key=value), may be repeated")
-	dryRun := fs.Bool("dry-run", false, "Show what would be done without making changes")
+	dryRun := fs.Bool("dry-run", resolveBool(cfg.Local.DryRun), "Show what would be done without making changes")
 
 	fs.Parse(args)
 
@@ -201,16 +208,25 @@ func cmdLocal(args []string) error {
 }
 
 // cmdInit initializes a remote system for nestor
-func cmdInit(args []string) error {
+func cmdInit(cfg *Config, args []string) error {
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
 
-	agentPath := fs.String("agent", "./build/nestor-agent",
+	initAgentPath := cfg.Init.Agent
+	if initAgentPath == "" {
+		initAgentPath = DefaultAgentPath
+	}
+	initRemoteAgentPath := cfg.Init.RemotePath
+	if initRemoteAgentPath == "" {
+		initRemoteAgentPath = DefaultRemoteAgentPath
+	}
+
+	agentPath := fs.String("agent", initAgentPath,
 		"Path to local agent binary")
-	sshKey := fs.String("ssh-key", os.Getenv("HOME")+"/.ssh/id_rsa",
+	sshKey := fs.String("ssh-key", cfg.resolveSSHKey("init"),
 		"Path to SSH private key")
-	signingKey := fs.String("signing-key", "",
+	signingKey := fs.String("signing-key", cfg.resolveSigningKey("init"),
 		"Path to signing key (defaults to SSH key)")
-	remoteAgentPath := fs.String("remote-path", "/usr/local/bin/nestor-agent",
+	remoteAgentPath := fs.String("remote-path", initRemoteAgentPath,
 		"Path to install agent on remote system")
 
 	fs.Parse(args)
@@ -252,14 +268,14 @@ func cmdInit(args []string) error {
 }
 
 // cmdAttach attaches to a running or completed agent
-func cmdAttach(args []string) error {
+func cmdAttach(cfg *Config, args []string) error {
 	fs := flag.NewFlagSet("attach", flag.ExitOnError)
 
-	sshKey := fs.String("ssh-key", os.Getenv("HOME")+"/.ssh/id_rsa",
+	sshKey := fs.String("ssh-key", cfg.resolveSSHKey("attach"),
 		"Path to SSH private key")
-	stateFile := fs.String("state-file", "/tmp/nestor-agent.state",
+	stateFile := fs.String("state-file", cfg.resolveStateFile("attach"),
 		"Path to agent state file on remote system")
-	follow := fs.Bool("follow", false,
+	follow := fs.Bool("follow", resolveBool(cfg.Attach.Follow),
 		"Follow execution in real-time (tail -f style)")
 
 	fs.Parse(args)
@@ -302,12 +318,12 @@ func cmdAttach(args []string) error {
 }
 
 // cmdStatus checks the status of a remote agent
-func cmdStatus(args []string) error {
+func cmdStatus(cfg *Config, args []string) error {
 	fs := flag.NewFlagSet("status", flag.ExitOnError)
 
-	sshKey := fs.String("ssh-key", os.Getenv("HOME")+"/.ssh/id_rsa",
+	sshKey := fs.String("ssh-key", cfg.resolveSSHKey("status"),
 		"Path to SSH private key")
-	stateFile := fs.String("state-file", "/tmp/nestor-agent.state",
+	stateFile := fs.String("state-file", cfg.resolveStateFile("status"),
 		"Path to agent state file on remote system")
 
 	fs.Parse(args)
