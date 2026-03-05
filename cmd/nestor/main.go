@@ -16,7 +16,7 @@ import (
 const (
 	Version                = "dev"
 	ControllerName         = "nestor"
-	DefaultAgentPath       = "./build/nestor-agent"
+	DefaultAgentPath       = "./build/nestor-agent-{os}-{arch}"
 	DefaultRemoteAgentPath = "/usr/local/bin/nestor-agent"
 )
 
@@ -184,11 +184,11 @@ func cmdLocal(cfg *Config, args []string) error {
 
 	varMap := make(map[string]string, len(vars))
 	for _, kv := range vars {
-		idx := strings.IndexByte(kv, '=')
-		if idx < 0 {
+		before, after, ok := strings.Cut(kv, "=")
+		if !ok {
 			return fmt.Errorf("-var %q must be in key=value form", kv)
 		}
-		varMap[kv[:idx]] = kv[idx+1:]
+		varMap[before] = after
 	}
 
 	data, err := os.ReadFile(filepath.Join(dir, "playbook.yaml"))

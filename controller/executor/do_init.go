@@ -30,6 +30,17 @@ func (e *Executor) InitRemote(host, agentBinaryPath string) error {
 	}
 	defer client.Close()
 
+	// Resolve {os}/{arch} placeholders in the agent binary path.
+	if HasArchPlaceholders(agentBinaryPath) {
+		log.Println("[INFO ] detecting remote system architecture...")
+		goos, goarch, err := detectRemoteSystem(client)
+		if err != nil {
+			return fmt.Errorf("failed to detect remote system: %w", err)
+		}
+		agentBinaryPath = ResolveAgentPath(agentBinaryPath, goos, goarch)
+		log.Printf("[INFO ] resolved agent binary: %s", agentBinaryPath)
+	}
+
 	// Install agent
 	log.Println("[INFO ] installing nestor-agent...")
 	if err := client.InstallAgent(agentBinaryPath); err != nil {
