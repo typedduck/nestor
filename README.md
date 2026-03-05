@@ -727,6 +727,7 @@ After execution, the agent reports results back to the controller:
 
 **Controller:**
 - Go 1.24+ (for building)
+- [UPX](https://upx.github.io/) (for building — compresses the Linux agent binaries)
 - SSH client
 - SSH key pair
 
@@ -751,8 +752,8 @@ make build
 ls -l build/
 # nestor                    (controller)
 # nestor-agent              (agent, local system and architecture)
-# nestor-agent-linux-amd64  (agent, Linux for AMD64)
-# nestor-agent-linux-arm64  (agent, Linux for ARM64)
+# nestor-agent-linux-amd64  (agent, Linux for AMD64, UPX-compressed)
+# nestor-agent-linux-arm64  (agent, Linux for ARM64, UPX-compressed)
 ```
 
 #### Quick Start

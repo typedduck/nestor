@@ -14,7 +14,9 @@ BUILD_TIME=$(shell date -u -Iseconds)
 # BUILD_TIME=$(shell date -u '+%Y-%m-%dT%H:%M:%S')
 
 # Linker flags
-LDFLAGS=-ldflags "-X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.BuildTime=$(BUILD_TIME)"
+LDFLAGS=-ldflags "-s -w -X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.BuildTime=$(BUILD_TIME)"
+# Agent linker flags: strip debug symbols and DWARF to minimize binary size
+# AGENT_LDFLAGS=-ldflags "-s -w -X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.BuildTime=$(BUILD_TIME)"
 
 .PHONY: all clean test test-integration build build-controller build-agent install help
 
@@ -50,13 +52,15 @@ build-agent:
 	@echo "Building agent for native platform..."
 	$(GO) build $(GOFLAGS) $(LDFLAGS) -o $(BUILD_DIR) ./cmd/$(AGENT_BINARY)
 	@echo "Building agent for Linux on amd64..."
-	GOOS=linux GOARCH=amd64 \
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 	$(GO) build $(GOFLAGS) $(LDFLAGS) \
 	-o $(BUILD_DIR)/$(AGENT_BINARY)-linux-amd64 ./cmd/$(AGENT_BINARY)
+	@upx --best $(BUILD_DIR)/$(AGENT_BINARY)-linux-amd64
 	@echo "Building agent for Linux on arm64..."
-	GOOS=linux GOARCH=arm64 \
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
 	$(GO) build $(GOFLAGS) $(LDFLAGS) \
 	-o $(BUILD_DIR)/$(AGENT_BINARY)-linux-arm64 ./cmd/$(AGENT_BINARY)
+	@upx --best $(BUILD_DIR)/$(AGENT_BINARY)-linux-arm64
 
 # Run all tests
 test:
