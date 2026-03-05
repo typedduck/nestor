@@ -13,17 +13,27 @@ import (
 	"github.com/typedduck/nestor/playbook"
 )
 
-// Deploy executes a playbook on a remote host
+// Deploy executes a deployment (pre-phase, remote, post-phase) on a remote host.
 //
 // This method orchestrates the complete execution flow:
-// 1. Package the playbook into a tar.gz archive
-// 2. Sign the archive with the controller's private key
-// 3. Connect to the remote host via SSH
-// 4. Transfer the playbook archive
-// 5. Deploy the agent on the remote host
-// 6. Collect and display results
-func (e *Executor) Deploy(pb *playbook.Playbook, host string) error {
-	log.Printf("[INFO ] executing playbook '%s' on %s", pb.Name, host)
+// 1. Reject --dry-run when pre: or post: phases are present
+// 2. Execute pre: phase locally on the controller (if present)
+// 3. Package the remote playbook into a tar.gz archive
+// 4. Sign the archive with the controller's private key
+// 5. Connect to the remote host via SSH
+// 6. Transfer the playbook archive
+// 7. Deploy the agent on the remote host
+// 8. Collect and display results
+// 9. Execute post: phase locally on the controller (if present)
+func (e *Executor) Deploy(d *Deployment, host string) error {
+	// Reject --dry-run when pre: or post: phases are present, because those
+	// phases have real side-effects that cannot be undone and dry-run mode
+	// would give a misleading picture of execution.
+	if e.dryRun && (d.Pre != nil || d.Post != nil) {
+		return fmt.Errorf("--dry-run is not supported for playbooks with pre: or post: sections")
+	}
+
+	log.Printf("[INFO ] executing playbook '%s' on %s", d.Remote.Name, host)
 
 	// Parse host (user@hostname)
 	user, hostname, port, err := parseHost(host)
@@ -31,9 +41,17 @@ func (e *Executor) Deploy(pb *playbook.Playbook, host string) error {
 		return fmt.Errorf("invalid host format: %w", err)
 	}
 
+	// Execute pre: phase on the controller.
+	if d.Pre != nil {
+		log.Println("[INFO ] executing pre: phase on controller...")
+		if err := Local(d.Pre, d.PlaybookDir, false); err != nil {
+			return fmt.Errorf("pre: phase failed: %w", err)
+		}
+	}
+
 	// Step 1: Package the playbook
 	log.Println("[INFO ] packaging playbook...")
-	pkg, err := e.packagePlaybook(pb)
+	pkg, err := e.packagePlaybook(d.Remote)
 	if err != nil {
 		return fmt.Errorf("failed to package playbook: %w", err)
 	}
@@ -44,7 +62,7 @@ func (e *Executor) Deploy(pb *playbook.Playbook, host string) error {
 		return fmt.Errorf("failed to sign playbook: %w", err)
 	}
 
-	// Dry run mode - stop here
+	// Dry run mode - stop here (only reached when pre/post are nil)
 	if e.dryRun {
 		log.Println("[INFO ] dry run complete, playbook packaged and signed")
 		log.Printf("[INFO ] archive: %s", pkg.ArchivePath)
@@ -153,6 +171,15 @@ agentComplete:
 	}
 
 	log.Println("[INFO ] playbook executed successfully")
+
+	// Execute post: phase on the controller.
+	if d.Post != nil {
+		log.Println("[INFO ] executing post: phase on controller...")
+		if err := Local(d.Post, d.PlaybookDir, false); err != nil {
+			return fmt.Errorf("post: phase failed: %w", err)
+		}
+	}
+
 	return nil
 }
 

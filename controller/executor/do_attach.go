@@ -46,24 +46,25 @@ func (e *Executor) Attach(host, stateFile string) (*ExecutionResult, error) {
 	return &result, nil
 }
 
-// AttachAndFollow attaches to a running agent and follows execution in real-time
+// AttachAndFollow attaches to a running agent and follows execution in real-time.
 //
 // This streams the agent's output as it executes, similar to tail -f.
 // Useful for monitoring long-running playbooks.
-func (e *Executor) AttachAndFollow(host, stateFile string) error {
+// Returns the final ExecutionResult so the caller can act on it (e.g. run post: phase).
+func (e *Executor) AttachAndFollow(host, stateFile string) (*ExecutionResult, error) {
 	log.Printf("[INFO ] attaching to agent on %s (follow mode)", host)
 
 	// Parse host
 	user, hostname, port, err := parseHost(host)
 	if err != nil {
-		return fmt.Errorf("invalid host format: %w", err)
+		return nil, fmt.Errorf("invalid host format: %w", err)
 	}
 
 	// Connect to remote host
 	log.Printf("[INFO ] connecting to %s...", host)
 	client, err := e.connectSSH(user, hostname, port)
 	if err != nil {
-		return fmt.Errorf("failed to connect: %w", err)
+		return nil, fmt.Errorf("failed to connect: %w", err)
 	}
 	defer client.Close()
 
@@ -73,7 +74,7 @@ func (e *Executor) AttachAndFollow(host, stateFile string) error {
 	// Check if agent is running
 	running, err := client.IsAgentRunning()
 	if err != nil {
-		return fmt.Errorf("failed to check agent status: %w", err)
+		return nil, fmt.Errorf("failed to check agent status: %w", err)
 	}
 
 	if !running {
@@ -81,10 +82,10 @@ func (e *Executor) AttachAndFollow(host, stateFile string) error {
 		log.Println("[INFO ] agent is not currently running, showing final state:")
 		result, err := e.Attach(host, stateFile)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		result.Display()
-		return nil
+		return result, nil
 	}
 
 	// Follow execution by polling state file
@@ -92,6 +93,7 @@ func (e *Executor) AttachAndFollow(host, stateFile string) error {
 	defer ticker.Stop()
 
 	var lastActionCount int
+	var finalResult ExecutionResult
 
 	for {
 		<-ticker.C
@@ -110,28 +112,26 @@ func (e *Executor) AttachAndFollow(host, stateFile string) error {
 			continue
 		}
 
-		var result ExecutionResult
-		if err := json.Unmarshal([]byte(stateJSON), &result); err != nil {
+		if err := json.Unmarshal([]byte(stateJSON), &finalResult); err != nil {
 			log.Printf("[WARN ] failed to parse state: %v", err)
 			continue
 		}
 
 		// Display new actions
-		if len(result.Actions) > lastActionCount {
-			for i := lastActionCount; i < len(result.Actions); i++ {
-				action := result.Actions[i]
-				action.Display()
+		if len(finalResult.Actions) > lastActionCount {
+			for i := lastActionCount; i < len(finalResult.Actions); i++ {
+				finalResult.Actions[i].Display()
 			}
-			lastActionCount = len(result.Actions)
+			lastActionCount = len(finalResult.Actions)
 		}
 
 		// If agent finished, show summary and exit
 		if !running {
 			log.Println("======== execution complete ========")
-			result.Summary.Display()
+			finalResult.Summary.Display()
 			break
 		}
 	}
 
-	return nil
+	return &finalResult, nil
 }

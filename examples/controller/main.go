@@ -40,7 +40,7 @@ func simpleDeployment() {
 	modules.File(b, "/etc/motd",
 		modules.Content("Welcome to a nestor-managed server\n"))
 
-	err := executor.Deploy(b.Playbook(), "user@webserver-01.example.com", &executor.Config{
+	err := executor.Deploy(&executor.Deployment{Remote: b.Playbook()}, "user@webserver-01.example.com", &executor.Config{
 		SSHKeyPath: "./examples/user-ssh/id_nestor_ed25519",
 		DryRun:     true,
 	})
@@ -115,7 +115,7 @@ func fullDeploymentWithConfig() {
 		"/etc/nginx/sites-available/webapp")
 
 	// Deploy the playbook
-	err := executor.Deploy(b.Playbook(), "deploy@webapp-01.example.com", &executor.Config{
+	err := executor.Deploy(&executor.Deployment{Remote: b.Playbook()}, "deploy@webapp-01.example.com", &executor.Config{
 		// WorkDir:        "/tmp/nestor-work",
 		// SSHKeyPath:     "/home/user/.ssh/deploy_key",
 		// SigningKeyPath: "/home/user/.ssh/nestor_signing_key",

@@ -14,12 +14,46 @@ import (
 	"github.com/typedduck/nestor/playbook/builder"
 )
 
+// phaseAllowedKinds lists the action kinds permitted in controller phases (pre/post).
+var phaseAllowedKinds = map[string]bool{
+	"command": true,
+	"script":  true,
+	"file":    true,
+}
+
+// validatePhaseActions returns an error if any action in the slice is not
+// allowed in a controller phase. phase is "pre" or "post" for error messages.
+func validatePhaseActions(phase string, actions []RawAction) error {
+	for _, raw := range actions {
+		if !phaseAllowedKinds[raw.Kind] {
+			return fmt.Errorf("%s: action %q is not allowed in controller phases (allowed: command, script, file)", phase, raw.Kind)
+		}
+	}
+	return nil
+}
+
+// buildPhase builds a *playbook.Playbook from a slice of RawActions.
+// env and name are inherited from the top-level playbook definition.
+func buildPhase(name string, env map[string]string, actions []RawAction) (*playbook.Playbook, error) {
+	b := builder.New(name)
+	for k, v := range env {
+		b.SetEnv(k, v)
+	}
+	for i, raw := range actions {
+		if err := dispatchAction(b, raw); err != nil {
+			return nil, fmt.Errorf("action %d (%s): %w", i+1, raw.Kind, err)
+		}
+	}
+	return b.Playbook(), nil
+}
+
 // Load parses YAML playbook bytes, applies variable substitution, and returns
-// a populated *builder.Builder ready for packaging and deployment.
+// a *LoadResult with the three execution phases (pre, remote, post).
 //
 // The vars parameter contains overrides (typically from --var CLI flags) that
 // take precedence over the vars: section in the YAML file.
-func Load(data []byte, vars map[string]string) (*builder.Builder, error) {
+// Pre and Post are nil when the respective YAML sections are absent.
+func Load(data []byte, vars map[string]string) (*LoadResult, error) {
 	// First pass: decode just enough to get the vars section.
 	var raw Playbook
 	if err := yaml3.Unmarshal(data, &raw); err != nil {
@@ -48,21 +82,35 @@ func Load(data []byte, vars map[string]string) (*builder.Builder, error) {
 		name = "unnamed"
 	}
 
-	b := builder.New(name)
-
-	// Populate environment variables.
-	for k, v := range pb.Environment {
-		b.SetEnv(k, v)
+	if err := validatePhaseActions("pre", pb.Pre); err != nil {
+		return nil, err
+	}
+	if err := validatePhaseActions("post", pb.Post); err != nil {
+		return nil, err
 	}
 
-	// Dispatch each action.
-	for i, raw := range pb.Actions {
-		if err := dispatchAction(b, raw); err != nil {
-			return nil, fmt.Errorf("action %d (%s): %w", i+1, raw.Kind, err)
+	var pre *playbook.Playbook
+	if len(pb.Pre) > 0 {
+		var err error
+		if pre, err = buildPhase(name, pb.Environment, pb.Pre); err != nil {
+			return nil, fmt.Errorf("pre: %w", err)
 		}
 	}
 
-	return b, nil
+	remote, err := buildPhase(name, pb.Environment, pb.Actions)
+	if err != nil {
+		return nil, err
+	}
+
+	var post *playbook.Playbook
+	if len(pb.Post) > 0 {
+		var err error
+		if post, err = buildPhase(name, pb.Environment, pb.Post); err != nil {
+			return nil, fmt.Errorf("post: %w", err)
+		}
+	}
+
+	return &LoadResult{Pre: pre, Remote: remote, Post: post}, nil
 }
 
 // applyVars replaces ${key} references in data with values from vars.

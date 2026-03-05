@@ -141,15 +141,19 @@ func cmdApply(cfg *Config, args []string) error {
 		return fmt.Errorf("failed to read playbook file: %w", err)
 	}
 
-	b, err := yamlloader.Load(data, varMap)
+	result, err := yamlloader.Load(data, varMap)
 	if err != nil {
 		return fmt.Errorf("failed to load playbook: %w", err)
 	}
 
-	pb := b.Playbook()
-	log.Printf("[INFO ] loaded %q: %d action(s)", pb.Name, len(pb.Actions))
+	log.Printf("[INFO ] loaded %q: %d action(s)", result.Remote.Name, len(result.Remote.Actions))
 
-	return executor.Deploy(pb, host, &executor.Config{
+	return executor.Deploy(&executor.Deployment{
+		Pre:         result.Pre,
+		Remote:      result.Remote,
+		Post:        result.Post,
+		PlaybookDir: filepath.Dir(playbookFile),
+	}, host, &executor.Config{
 		SSHKeyPath:     *sshKey,
 		SigningKeyPath: *signingKey,
 		KnownHostsPath: *knownHosts,
@@ -196,15 +200,18 @@ func cmdLocal(cfg *Config, args []string) error {
 		return fmt.Errorf("failed to read playbook.yaml: %w", err)
 	}
 
-	b, err := yamlloader.Load(data, varMap)
+	result, err := yamlloader.Load(data, varMap)
 	if err != nil {
 		return fmt.Errorf("failed to load playbook: %w", err)
 	}
 
-	pb := b.Playbook()
-	log.Printf("[INFO ] loaded %q: %d action(s)", pb.Name, len(pb.Actions))
+	if result.Pre != nil || result.Post != nil {
+		return fmt.Errorf("pre: and post: sections are not supported with 'nestor local'")
+	}
 
-	return executor.Local(pb, dir, *dryRun)
+	log.Printf("[INFO ] loaded %q: %d action(s)", result.Remote.Name, len(result.Remote.Actions))
+
+	return executor.Local(result.Remote, dir, *dryRun)
 }
 
 // cmdInit initializes a remote system for nestor
@@ -277,6 +284,8 @@ func cmdAttach(cfg *Config, args []string) error {
 		"Path to agent state file on remote system")
 	follow := fs.Bool("follow", resolveBool(cfg.Attach.Follow),
 		"Follow execution in real-time (tail -f style)")
+	playbookFile := fs.String("playbook", "",
+		"Playbook YAML file; if set and remote succeeded, the post: phase is executed")
 
 	fs.Parse(args)
 
@@ -291,28 +300,43 @@ func cmdAttach(cfg *Config, args []string) error {
 
 	log.Printf("[INFO ] attaching to agent on %s...\n", host)
 
-	// Create executor
-	config := &executor.Config{
-		SSHKeyPath: *sshKey,
-	}
-
-	exec, err := executor.New(config)
+	exec, err := executor.New(&executor.Config{SSHKeyPath: *sshKey})
 	if err != nil {
 		return fmt.Errorf("failed to create executor: %w", err)
 	}
 
-	// Attach to remote agent
-	if *follow {
-		return exec.AttachAndFollow(host, *stateFile)
-	}
+	var result *executor.ExecutionResult
 
-	result, err := exec.Attach(host, *stateFile)
+	if *follow {
+		result, err = exec.AttachAndFollow(host, *stateFile)
+	} else {
+		result, err = exec.Attach(host, *stateFile)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to attach: %w", err)
 	}
 
-	// Display results
-	displayExecutionResult(result)
+	if !*follow {
+		displayExecutionResult(result)
+	}
+
+	// Run post: phase if a playbook was specified and the remote succeeded.
+	if *playbookFile != "" && result.Status == "completed" && result.Summary.Failed == 0 {
+		data, err := os.ReadFile(*playbookFile)
+		if err != nil {
+			return fmt.Errorf("failed to read playbook file: %w", err)
+		}
+		loaded, err := yamlloader.Load(data, nil)
+		if err != nil {
+			return fmt.Errorf("failed to load playbook: %w", err)
+		}
+		if loaded.Post != nil {
+			log.Println("[INFO ] executing post: phase on controller...")
+			if err := executor.Local(loaded.Post, filepath.Dir(*playbookFile), false); err != nil {
+				return fmt.Errorf("post: phase failed: %w", err)
+			}
+		}
+	}
 
 	return nil
 }

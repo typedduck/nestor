@@ -58,13 +58,21 @@ func InitRemote(host, agentBinaryPath string, config *Config) error {
 	return nil
 }
 
-func Deploy(pb *playbook.Playbook, host string, config *Config) error {
+// Deployment groups the three execution phases of a nestor apply run.
+type Deployment struct {
+	Pre         *playbook.Playbook // nil if no pre: section
+	Remote      *playbook.Playbook // always required
+	Post        *playbook.Playbook // nil if no post: section
+	PlaybookDir string             // dir for resolving file paths in pre/post
+}
+
+func Deploy(d *Deployment, host string, config *Config) error {
 	exec, err := New(config)
 	if err != nil {
 		return fmt.Errorf("failed to create executor: %w", err)
 	}
 
-	if err := exec.Deploy(pb, host); err != nil {
+	if err := exec.Deploy(d, host); err != nil {
 		return fmt.Errorf("deployment failed: %w", err)
 	}
 

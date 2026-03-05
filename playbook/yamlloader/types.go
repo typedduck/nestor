@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	yaml3 "gopkg.in/yaml.v3"
+
+	"github.com/typedduck/nestor/playbook"
 )
 
 // Playbook is the top-level structure of a YAML playbook file.
@@ -11,7 +13,17 @@ type Playbook struct {
 	Name        string            `yaml:"name"`
 	Environment map[string]string `yaml:"environment"`
 	Vars        map[string]string `yaml:"vars"`
+	Pre         []RawAction       `yaml:"pre"`
 	Actions     []RawAction       `yaml:"actions"`
+	Post        []RawAction       `yaml:"post"`
+}
+
+// LoadResult holds the three execution phases of a parsed playbook.
+// Pre and Post are nil when the respective YAML section is absent.
+type LoadResult struct {
+	Pre    *playbook.Playbook // controller pre-phase
+	Remote *playbook.Playbook // packaged and executed on remote host
+	Post   *playbook.Playbook // controller post-phase
 }
 
 // RawAction captures one action entry as (kind, raw node) by custom unmarshaling.

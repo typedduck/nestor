@@ -16,6 +16,7 @@ nestor follows a controller-agent architecture where the controller runs on your
 - **Idempotent actions** - Built-in actions are designed to be safely re-runnable
 - **Signed playbooks** - Cryptographic verification of playbook integrity and authenticity
 - **YAML playbooks** - Write and run playbooks without writing Go code using the `nestor apply` command
+- **Controller phases** - `pre:` and `post:` sections run commands, scripts, and file operations on the controller before packaging or after remote completion (build artefacts, fetch secrets, send notifications)
 - **Local execution** - Run a playbook on the local machine with `nestor local` — no SSH, no agent, no packaging
 - **Simple deployment** - Bootstrap remote systems with a single init command
 - **Cross-platform** - Runs on Linux, macOS, and other Unix-like systems
@@ -106,40 +107,49 @@ Actions are the atomic execution units implemented in the agent. They:
 ### Execution Flow
 
 ```
-┌──────────────┐
-│  Controller  │
-│              │
-│  1. Execute  │
-│     modules  │
-│              │
-│  2. Assemble │
-│     playbook │
-│              │
-│  3. Sign     │
-│     playbook │
-└──────┬───────┘
-       │ SSH
-       │ scp playbook.tar.gz
-       │ ssh sudo ./nestor-agent
-       ▼
+┌──────────────────────┐
+│  Controller          │
+│                      │
+│  1. pre: phase       │  ← runs locally on controller (optional)
+│     (commands,       │
+│      scripts, files) │
+│                      │
+│  2. Assemble remote  │
+│     playbook         │
+│                      │
+│  3. Sign playbook    │
+└──────────┬───────────┘
+           │ SSH
+           │ scp playbook.tar.gz
+           │ ssh sudo ./nestor-agent
+           ▼
 ┌────────────────────┐
 │ Remote Host        │
 │                    │
 │  ┌──────────────┐  │
 │  │ Agent        │  │
 │  │              │  │
-│  │ 1. Verify    │  |
-│  │    signature |  |
+│  │ 1. Verify    │  │
+│  │    signature │  │
 │  │              │  │
-│  │ 2. Validate  |  |
-│  │    manifest  │  |
+│  │ 2. Validate  │  │
+│  │    manifest  │  │
 │  │              │  │
-│  │ 3. Execute   |  |
-│  │    actions   │  |
+│  │ 3. Execute   │  │
+│  │    actions   │  │
 │  │              │  │
-│  │ 4. Report    │  |
+│  │ 4. Report    │  │
 │  └──────────────┘  │
-└────────────────────┘
+└──────────┬─────────┘
+           │ SSH (results)
+           ▼
+┌──────────────────────┐
+│  Controller          │
+│                      │
+│  4. post: phase      │  ← runs locally on controller (optional)
+│     (commands,       │     only when remote succeeded
+│      scripts, files) │
+└──────────────────────┘
 ```
 
 ## Module API Design
@@ -355,7 +365,7 @@ func main() {
 
     deployWebApp(b, "v1.2.3")
 
-    err := executor.Deploy(b.Playbook(), "deploy@app-server-01.example.com", &executor.Config{
+    err := executor.Deploy(&executor.Deployment{Remote: b.Playbook()}, "deploy@app-server-01.example.com", &executor.Config{
         SSHKeyPath: "~/.ssh/deploy_key",
     })
     if err != nil {
@@ -379,6 +389,13 @@ environment:
 vars:
   app_port: "8080"
   db_host: db.example.com
+
+# Optional: runs on the controller before packaging (command, script, file only)
+pre:
+  - command: make build
+  - command:
+      run: ./fetch-secrets.sh
+      creates: secrets/db.env
 
 actions:
   - package: update           # short form (update/upgrade)
@@ -439,6 +456,10 @@ actions:
   - service:
       name: nginx
       action: start
+
+# Optional: runs on the controller after remote succeeds (command, script, file only)
+post:
+  - command: ./notify-slack.sh deployed ${ENVIRONMENT}
 ```
 
 ### Variable Substitution
@@ -463,6 +484,45 @@ Variables passed via `--var` flags on the command line override values from `var
 
 > **Note:** Quote mode strings (`"0755"`, `"0644"`) to prevent YAML from interpreting them as decimal numbers.
 
+### Controller Phases: `pre:` and `post:`
+
+A playbook may optionally include `pre:` and `post:` sections that run **on the controller** before packaging and after remote completion, respectively.
+
+```yaml
+pre:
+  - command: make build           # build binary before packaging
+  - command:
+      run: vault read -field=value secret/db > secrets/db.env
+      creates: secrets/db.env     # skip if already fetched
+
+actions:
+  - file:
+      path: /opt/app/bin/app
+      upload: ./build/app         # artifact produced by pre:
+      mode: "0755"
+  - service:
+      name: app
+      action: restart
+
+post:
+  - command: ./scripts/notify.sh "deployed to ${ENVIRONMENT}"
+  - script:
+      source: scripts/smoke-test.sh
+      args: ["--host", "app.example.com"]
+```
+
+**Allowed action kinds in `pre:` and `post:`:** `command`, `script`, `file`.
+Actions that only make sense on a remote Linux system — `package`, `service`, `directory`, `symlink`, `remove` — are rejected at load time.
+
+**Execution order:**
+1. `pre:` runs on the controller (never in dry-run)
+2. Remote playbook is packaged, signed, transferred, and executed
+3. `post:` runs on the controller **only if the remote phase succeeded**
+
+**Restrictions:**
+- `--dry-run` is rejected when `pre:` or `post:` sections are present
+- `nestor local` does not support `pre:` or `post:`; use the `actions:` section only
+
 ### `nestor apply` Command
 
 ```
@@ -475,7 +535,7 @@ nestor apply [options] <playbook.yaml> user@host
 | `-ssh-key path` | `~/.ssh/id_ed25519` | SSH private key for authentication |
 | `-signing-key path` | same as `-ssh-key` | Key used to sign the playbook |
 | `-known-hosts path` | `~/.ssh/known_hosts` | SSH known_hosts file |
-| `-dry-run` | false | Package and sign without deploying |
+| `-dry-run` | false | Package and sign without deploying. Not supported when `pre:` or `post:` sections are present. |
 
 **Examples:**
 
@@ -535,7 +595,7 @@ myplaybook/
 - Applying a template repository's provisioning playbook locally
 - Testing playbook logic before deploying to a remote host
 
-`nestor local` skips service handlers (no `service.*` actions), since managing system services on a developer's own machine is outside the intended scope. All other action types work as usual, including package installation via Homebrew on macOS.
+`nestor local` executes the `actions:` section only. Playbooks that contain `pre:` or `post:` sections are rejected — those sections are intended for controller-side steps that complement a remote deployment, not a local run. All action types in `actions:` work as usual, including package installation via Homebrew on macOS, except `service.*` actions which are skipped (managing system services on a developer's machine is outside the intended scope).
 
 > **Note:** Operations that write to system paths (e.g. `/etc`, `/usr/local`) still require elevated privileges. Run with `sudo` on Linux when needed; on macOS, Homebrew actions run without sudo.
 
@@ -750,7 +810,7 @@ func main() {
         modules.Content("Welcome to nestor-managed system\n"))
     modules.Service(b, "ssh", "start")
 
-    err := executor.Deploy(b.Playbook(), "user@remote-host", &executor.Config{
+    err := executor.Deploy(&executor.Deployment{Remote: b.Playbook()}, "user@remote-host", &executor.Config{
         SSHKeyPath: "~/.ssh/id_ed25519",
     })
     if err != nil {
@@ -782,7 +842,12 @@ If the SSH connection drops during execution, the agent continues running:
 ```bash
 # Reattach to see current status or final results
 nestor attach user@remote-host
+
+# Reattach, follow execution in real-time, then run the post: phase
+nestor attach --follow --playbook deploy.yaml user@remote-host
 ```
+
+The `--playbook` flag is required to execute the `post:` phase after reattaching. When provided, nestor loads the YAML, and if the remote execution completed successfully, runs the `post:` section on the controller — exactly as it would have during `nestor apply`.
 
 ## Security Model
 
@@ -817,6 +882,8 @@ nestor is in active early development. The core architecture is established, but
 - ✅ Dry-run mode
 - ✅ YAML playbook format with `nestor apply`
 - ✅ Local execution with `nestor local` (no SSH, no agent — runs in-process on the local machine)
+- ✅ Controller `pre:` and `post:` phases in YAML playbooks
+- ✅ `nestor attach --playbook` to run `post:` phase after reattaching
 
 ### Planned
 

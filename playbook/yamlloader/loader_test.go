@@ -1,6 +1,7 @@
 package yamlloader_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/typedduck/nestor/playbook/yamlloader"
@@ -8,16 +9,16 @@ import (
 
 func mustLoad(t *testing.T, yaml string, vars map[string]string) *[]interface{} {
 	t.Helper()
-	b, err := yamlloader.Load([]byte(yaml), vars)
+	result, err := yamlloader.Load([]byte(yaml), vars)
 	if err != nil {
 		t.Fatalf("Load() returned unexpected error: %v", err)
 	}
-	actions := b.Playbook().Actions
-	result := make([]interface{}, len(actions))
+	actions := result.Remote.Actions
+	out := make([]interface{}, len(actions))
 	for i, a := range actions {
-		result[i] = a
+		out[i] = a
 	}
-	return &result
+	return &out
 }
 
 func mustLoadErr(t *testing.T, yaml string) error {
@@ -35,11 +36,11 @@ name: test
 actions:
   - package: update
 `
-	b, err := yamlloader.Load([]byte(yaml), nil)
+	result, err := yamlloader.Load([]byte(yaml), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	actions := b.Playbook().Actions
+	actions := result.Remote.Actions
 	if len(actions) != 1 {
 		t.Fatalf("expected 1 action, got %d", len(actions))
 	}
@@ -54,11 +55,11 @@ name: test
 actions:
   - package: upgrade
 `
-	b, err := yamlloader.Load([]byte(yaml), nil)
+	result, err := yamlloader.Load([]byte(yaml), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	actions := b.Playbook().Actions
+	actions := result.Remote.Actions
 	if len(actions) != 1 {
 		t.Fatalf("expected 1 action, got %d", len(actions))
 	}
@@ -74,11 +75,11 @@ actions:
   - package:
       install: [nginx, vim]
 `
-	b, err := yamlloader.Load([]byte(yaml), nil)
+	result, err := yamlloader.Load([]byte(yaml), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	actions := b.Playbook().Actions
+	actions := result.Remote.Actions
 	if len(actions) != 1 {
 		t.Fatalf("expected 1 action, got %d", len(actions))
 	}
@@ -101,11 +102,11 @@ actions:
   - package:
       remove: [apache2]
 `
-	b, err := yamlloader.Load([]byte(yaml), nil)
+	result, err := yamlloader.Load([]byte(yaml), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	actions := b.Playbook().Actions
+	actions := result.Remote.Actions
 	if len(actions) != 1 {
 		t.Fatalf("expected 1 action, got %d", len(actions))
 	}
@@ -132,11 +133,11 @@ actions:
       owner: root
       group: root
 `
-	b, err := yamlloader.Load([]byte(yaml), nil)
+	result, err := yamlloader.Load([]byte(yaml), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	actions := b.Playbook().Actions
+	actions := result.Remote.Actions
 	if len(actions) != 1 {
 		t.Fatalf("expected 1 action, got %d", len(actions))
 	}
@@ -168,11 +169,11 @@ actions:
       owner: webapp
       mode: "0640"
 `
-	b, err := yamlloader.Load([]byte(yaml), nil)
+	result, err := yamlloader.Load([]byte(yaml), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	actions := b.Playbook().Actions
+	actions := result.Remote.Actions
 	if len(actions) != 1 {
 		t.Fatalf("expected 1 action, got %d", len(actions))
 	}
@@ -201,11 +202,11 @@ actions:
       upload: ./build/app
       mode: "0755"
 `
-	b, err := yamlloader.Load([]byte(yaml), nil)
+	result, err := yamlloader.Load([]byte(yaml), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	actions := b.Playbook().Actions
+	actions := result.Remote.Actions
 	if len(actions) != 1 {
 		t.Fatalf("expected 1 action, got %d", len(actions))
 	}
@@ -232,11 +233,11 @@ actions:
       mode: "0755"
       recursive: true
 `
-	b, err := yamlloader.Load([]byte(yaml), nil)
+	result, err := yamlloader.Load([]byte(yaml), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	actions := b.Playbook().Actions
+	actions := result.Remote.Actions
 	if len(actions) != 1 {
 		t.Fatalf("expected 1 action, got %d", len(actions))
 	}
@@ -260,11 +261,11 @@ actions:
       dest: /etc/nginx/sites-enabled/app
       target: /etc/nginx/sites-available/app
 `
-	b, err := yamlloader.Load([]byte(yaml), nil)
+	result, err := yamlloader.Load([]byte(yaml), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	actions := b.Playbook().Actions
+	actions := result.Remote.Actions
 	if len(actions) != 1 {
 		t.Fatalf("expected 1 action, got %d", len(actions))
 	}
@@ -288,11 +289,11 @@ actions:
       path: /opt/app-old
       recursive: true
 `
-	b, err := yamlloader.Load([]byte(yaml), nil)
+	result, err := yamlloader.Load([]byte(yaml), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	actions := b.Playbook().Actions
+	actions := result.Remote.Actions
 	if len(actions) != 1 {
 		t.Fatalf("expected 1 action, got %d", len(actions))
 	}
@@ -314,11 +315,11 @@ name: test
 actions:
   - command: echo hello
 `
-	b, err := yamlloader.Load([]byte(yaml), nil)
+	result, err := yamlloader.Load([]byte(yaml), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	actions := b.Playbook().Actions
+	actions := result.Remote.Actions
 	if len(actions) != 1 {
 		t.Fatalf("expected 1 action, got %d", len(actions))
 	}
@@ -341,11 +342,11 @@ actions:
       env: [KEY=value]
       chdir: /tmp
 `
-	b, err := yamlloader.Load([]byte(yaml), nil)
+	result, err := yamlloader.Load([]byte(yaml), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	actions := b.Playbook().Actions
+	actions := result.Remote.Actions
 	if len(actions) != 1 {
 		t.Fatalf("expected 1 action, got %d", len(actions))
 	}
@@ -380,11 +381,11 @@ actions:
       args: [--verbose]
       creates: /etc/setup.done
 `
-	b, err := yamlloader.Load([]byte(yaml), nil)
+	result, err := yamlloader.Load([]byte(yaml), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	actions := b.Playbook().Actions
+	actions := result.Remote.Actions
 	if len(actions) != 1 {
 		t.Fatalf("expected 1 action, got %d", len(actions))
 	}
@@ -415,11 +416,11 @@ actions:
       name: nginx
       action: start
 `
-	b, err := yamlloader.Load([]byte(yaml), nil)
+	result, err := yamlloader.Load([]byte(yaml), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	actions := b.Playbook().Actions
+	actions := result.Remote.Actions
 	if len(actions) != 1 {
 		t.Fatalf("expected 1 action, got %d", len(actions))
 	}
@@ -442,11 +443,11 @@ actions:
       path: /tmp/port
       content: "port=${app_port}\n"
 `
-	b, err := yamlloader.Load([]byte(yaml), nil)
+	result, err := yamlloader.Load([]byte(yaml), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	actions := b.Playbook().Actions
+	actions := result.Remote.Actions
 	if len(actions) != 1 {
 		t.Fatalf("expected 1 action, got %d", len(actions))
 	}
@@ -466,11 +467,11 @@ actions:
       path: /tmp/port
       content: "${app_port}"
 `
-	b, err := yamlloader.Load([]byte(yaml), map[string]string{"app_port": "9090"})
+	result, err := yamlloader.Load([]byte(yaml), map[string]string{"app_port": "9090"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	actions := b.Playbook().Actions
+	actions := result.Remote.Actions
 	if len(actions) != 1 {
 		t.Fatalf("expected 1 action, got %d", len(actions))
 	}
@@ -488,11 +489,11 @@ environment:
   APP_VERSION: "1.2.3"
 actions: []
 `
-	b, err := yamlloader.Load([]byte(yaml), nil)
+	result, err := yamlloader.Load([]byte(yaml), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	env := b.Playbook().Environment
+	env := result.Remote.Environment
 	if env["ENVIRONMENT"] != "production" {
 		t.Errorf("expected ENVIRONMENT=production, got %q", env["ENVIRONMENT"])
 	}
@@ -509,11 +510,11 @@ actions:
   - package: upgrade
   - command: echo done
 `
-	b, err := yamlloader.Load([]byte(yaml), nil)
+	result, err := yamlloader.Load([]byte(yaml), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	actions := b.Playbook().Actions
+	actions := result.Remote.Actions
 	if len(actions) != 3 {
 		t.Fatalf("expected 3 actions, got %d", len(actions))
 	}
@@ -561,4 +562,188 @@ actions:
       path: /tmp/hello
 `
 	mustLoadErr(t, yaml)
+}
+
+// --- New tests for pre:/post: phases ---
+
+func TestLoad_BackwardCompat(t *testing.T) {
+	const yaml = `
+name: test
+actions:
+  - command: echo hello
+`
+	result, err := yamlloader.Load([]byte(yaml), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Pre != nil {
+		t.Errorf("expected Pre to be nil, got %v", result.Pre)
+	}
+	if result.Post != nil {
+		t.Errorf("expected Post to be nil, got %v", result.Post)
+	}
+	if result.Remote == nil {
+		t.Fatal("expected Remote to be non-nil")
+	}
+	if len(result.Remote.Actions) != 1 {
+		t.Errorf("expected 1 Remote action, got %d", len(result.Remote.Actions))
+	}
+}
+
+func TestLoad_WithPreSection(t *testing.T) {
+	const yaml = `
+name: test
+pre:
+  - command: echo pre
+actions:
+  - command: echo remote
+`
+	result, err := yamlloader.Load([]byte(yaml), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Pre == nil {
+		t.Fatal("expected Pre to be non-nil")
+	}
+	if len(result.Pre.Actions) != 1 || result.Pre.Actions[0].Params["command"] != "echo pre" {
+		t.Errorf("unexpected Pre actions: %v", result.Pre.Actions)
+	}
+	if result.Post != nil {
+		t.Errorf("expected Post to be nil, got %v", result.Post)
+	}
+	if len(result.Remote.Actions) != 1 {
+		t.Errorf("expected 1 Remote action, got %d", len(result.Remote.Actions))
+	}
+}
+
+func TestLoad_WithPostSection(t *testing.T) {
+	const yaml = `
+name: test
+actions:
+  - command: echo remote
+post:
+  - command: echo post
+`
+	result, err := yamlloader.Load([]byte(yaml), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Pre != nil {
+		t.Errorf("expected Pre to be nil, got %v", result.Pre)
+	}
+	if result.Post == nil {
+		t.Fatal("expected Post to be non-nil")
+	}
+	if len(result.Post.Actions) != 1 || result.Post.Actions[0].Params["command"] != "echo post" {
+		t.Errorf("unexpected Post actions: %v", result.Post.Actions)
+	}
+}
+
+func TestLoad_WithPreAndPost(t *testing.T) {
+	const yaml = `
+name: test
+pre:
+  - command: echo pre
+actions:
+  - command: echo remote
+post:
+  - command: echo post
+`
+	result, err := yamlloader.Load([]byte(yaml), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Pre == nil {
+		t.Fatal("expected Pre to be non-nil")
+	}
+	if result.Remote == nil {
+		t.Fatal("expected Remote to be non-nil")
+	}
+	if result.Post == nil {
+		t.Fatal("expected Post to be non-nil")
+	}
+	if len(result.Pre.Actions) != 1 {
+		t.Errorf("expected 1 Pre action, got %d", len(result.Pre.Actions))
+	}
+	if len(result.Remote.Actions) != 1 {
+		t.Errorf("expected 1 Remote action, got %d", len(result.Remote.Actions))
+	}
+	if len(result.Post.Actions) != 1 {
+		t.Errorf("expected 1 Post action, got %d", len(result.Post.Actions))
+	}
+}
+
+func TestLoad_PreRejectsPackage(t *testing.T) {
+	const yaml = `
+name: test
+pre:
+  - package: update
+actions:
+  - command: echo hello
+`
+	err := mustLoadErr(t, yaml)
+	if !strings.Contains(err.Error(), "pre") {
+		t.Errorf("expected error to mention 'pre', got: %v", err)
+	}
+}
+
+func TestLoad_PreRejectsService(t *testing.T) {
+	const yaml = `
+name: test
+pre:
+  - service:
+      name: nginx
+      action: start
+actions:
+  - command: echo hello
+`
+	err := mustLoadErr(t, yaml)
+	if !strings.Contains(err.Error(), "pre") {
+		t.Errorf("expected error to mention 'pre', got: %v", err)
+	}
+}
+
+func TestLoad_PostRejectsDirectory(t *testing.T) {
+	const yaml = `
+name: test
+actions:
+  - command: echo hello
+post:
+  - directory:
+      path: /tmp/out
+`
+	err := mustLoadErr(t, yaml)
+	if !strings.Contains(err.Error(), "post") {
+		t.Errorf("expected error to mention 'post', got: %v", err)
+	}
+}
+
+func TestLoad_EnvironmentSharedAcrossPhases(t *testing.T) {
+	const yaml = `
+name: test
+environment:
+  MY_VAR: hello
+pre:
+  - command: echo pre
+actions:
+  - command: echo remote
+post:
+  - command: echo post
+`
+	result, err := yamlloader.Load([]byte(yaml), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, phase := range []*struct {
+		name string
+		env  map[string]string
+	}{
+		{"pre", result.Pre.Environment},
+		{"remote", result.Remote.Environment},
+		{"post", result.Post.Environment},
+	} {
+		if phase.env["MY_VAR"] != "hello" {
+			t.Errorf("%s phase: expected MY_VAR=hello, got %q", phase.name, phase.env["MY_VAR"])
+		}
+	}
 }
