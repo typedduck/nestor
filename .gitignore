@@ -8,4 +8,5 @@ CLAUDE.md
 go.sum
 /*.tar.gz
 /*.sig
+/coverage.*
 /playbook-*
