@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/typedduck/nestor/controller/signer"
+	"github.com/typedduck/nestor/util"
 )
 
 // InitRemote initializes a remote system for use with nestor
@@ -17,7 +18,7 @@ func (e *Executor) InitRemote(host, agentBinaryPath string) error {
 	log.Printf("[INFO ] initializing %s for nestor", host)
 
 	// Parse host
-	user, hostname, port, err := parseHost(host)
+	user, hostname, port, err := util.ParseHost(host)
 	if err != nil {
 		return fmt.Errorf("invalid host format: %w", err)
 	}

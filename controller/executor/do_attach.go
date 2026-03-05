@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"time"
+
+	"github.com/typedduck/nestor/util"
 )
 
 // Attach attaches to a running or completed agent and retrieves its state
@@ -16,7 +18,7 @@ func (e *Executor) Attach(host, stateFile string) (*ExecutionResult, error) {
 	log.Printf("[INFO ] attaching to agent on %s", host)
 
 	// Parse host
-	user, hostname, port, err := parseHost(host)
+	user, hostname, port, err := util.ParseHost(host)
 	if err != nil {
 		return nil, fmt.Errorf("invalid host format: %w", err)
 	}
@@ -55,7 +57,7 @@ func (e *Executor) AttachAndFollow(host, stateFile string) (*ExecutionResult, er
 	log.Printf("[INFO ] attaching to agent on %s (follow mode)", host)
 
 	// Parse host
-	user, hostname, port, err := parseHost(host)
+	user, hostname, port, err := util.ParseHost(host)
 	if err != nil {
 		return nil, fmt.Errorf("invalid host format: %w", err)
 	}

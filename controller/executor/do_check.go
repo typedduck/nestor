@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/typedduck/nestor/util"
 )
 
 // AgentStatus represents the status of a remote agent
@@ -24,7 +26,7 @@ type AgentStatus struct {
 // CheckStatus checks the status of a remote agent without attaching
 func (e *Executor) CheckStatus(host, stateFile string) (*AgentStatus, error) {
 	// Parse host
-	user, hostname, port, err := parseHost(host)
+	user, hostname, port, err := util.ParseHost(host)
 	if err != nil {
 		return nil, fmt.Errorf("invalid host format: %w", err)
 	}

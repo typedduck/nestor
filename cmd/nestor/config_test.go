@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/typedduck/nestor/util"
 )
 
 // writeTempConfig writes content to a file at path, creating parent dirs as needed.
@@ -289,14 +291,14 @@ func TestResolveBool(t *testing.T) {
 func TestExpandHome(t *testing.T) {
 	home, _ := os.UserHomeDir()
 
-	got := expandHome("~/.ssh/id_ed25519")
+	got := util.MustExpandPath("~/.ssh/id_ed25519")
 	want := filepath.Join(home, ".ssh", "id_ed25519")
 	if got != want {
 		t.Errorf("expandHome = %q, want %q", got, want)
 	}
 
 	// Non-~ paths unchanged
-	if got := expandHome("/absolute/path"); got != "/absolute/path" {
+	if got := util.MustExpandPath("/absolute/path"); got != "/absolute/path" {
 		t.Errorf("expandHome(/absolute/path) = %q, want unchanged", got)
 	}
 }

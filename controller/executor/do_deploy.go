@@ -11,6 +11,7 @@ import (
 	"github.com/typedduck/nestor/controller/signer"
 	"github.com/typedduck/nestor/controller/ssh"
 	"github.com/typedduck/nestor/playbook"
+	"github.com/typedduck/nestor/util"
 )
 
 // Deploy executes a deployment (pre-phase, remote, post-phase) on a remote host.
@@ -36,7 +37,7 @@ func (e *Executor) Deploy(d *Deployment, host string) error {
 	log.Printf("[INFO ] executing playbook '%s' on %s", d.Remote.Name, host)
 
 	// Parse host (user@hostname)
-	user, hostname, port, err := parseHost(host)
+	user, hostname, port, err := util.ParseHost(host)
 	if err != nil {
 		return fmt.Errorf("invalid host format: %w", err)
 	}

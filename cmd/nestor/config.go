@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/typedduck/nestor/util"
 	"gopkg.in/yaml.v3"
 )
 
@@ -20,7 +21,7 @@ import (
 //	macOS Library config < XDG config < pwd config < env vars < CLI flags
 type Config struct {
 	SSHKey     string `yaml:"ssh-key"`
-	SigningKey  string `yaml:"signing-key"`
+	SigningKey string `yaml:"signing-key"`
 	KnownHosts string `yaml:"known-hosts"`
 
 	Apply  ApplyConfig  `yaml:"apply"`
@@ -33,7 +34,7 @@ type Config struct {
 // ApplyConfig holds per-command defaults for the apply command.
 type ApplyConfig struct {
 	SSHKey     string `yaml:"ssh-key"`
-	SigningKey  string `yaml:"signing-key"`
+	SigningKey string `yaml:"signing-key"`
 	KnownHosts string `yaml:"known-hosts"`
 	DryRun     *bool  `yaml:"dry-run"`
 }
@@ -41,7 +42,7 @@ type ApplyConfig struct {
 // InitConfig holds per-command defaults for the init command.
 type InitConfig struct {
 	SSHKey     string `yaml:"ssh-key"`
-	SigningKey  string `yaml:"signing-key"`
+	SigningKey string `yaml:"signing-key"`
 	Agent      string `yaml:"agent"`
 	RemotePath string `yaml:"remote-path"`
 }
@@ -219,10 +220,10 @@ func (c *Config) resolveSSHKey(cmd string) string {
 		cmdKey = c.Status.SSHKey
 	}
 	if cmdKey != "" {
-		return expandHome(cmdKey)
+		return util.MustExpandPath(cmdKey)
 	}
 	if c.SSHKey != "" {
-		return expandHome(c.SSHKey)
+		return util.MustExpandPath(c.SSHKey)
 	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".ssh", "id_ed25519")
@@ -239,9 +240,9 @@ func (c *Config) resolveSigningKey(cmd string) string {
 		cmdKey = c.Init.SigningKey
 	}
 	if cmdKey != "" {
-		return expandHome(cmdKey)
+		return util.MustExpandPath(cmdKey)
 	}
-	return expandHome(c.SigningKey)
+	return util.MustExpandPath(c.SigningKey)
 }
 
 // resolveKnownHosts returns the effective known-hosts default for the named command.
@@ -251,10 +252,10 @@ func (c *Config) resolveKnownHosts(cmd string) string {
 		cmdKey = c.Apply.KnownHosts
 	}
 	if cmdKey != "" {
-		return expandHome(cmdKey)
+		return util.MustExpandPath(cmdKey)
 	}
 	if c.KnownHosts != "" {
-		return expandHome(c.KnownHosts)
+		return util.MustExpandPath(c.KnownHosts)
 	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".ssh", "known_hosts")
@@ -281,16 +282,4 @@ func resolveBool(v *bool) bool {
 		return *v
 	}
 	return false
-}
-
-// expandHome replaces a leading ~ with the user's home directory.
-func expandHome(path string) string {
-	if len(path) == 0 || path[0] != '~' {
-		return path
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return path
-	}
-	return filepath.Join(home, path[1:])
 }
