@@ -61,13 +61,13 @@ build-agent:
 # Run all tests
 test:
 	@echo "Running tests..."
-	$(GO) test ./... -v
+	$(GO) test ./...
 
 # Run integration tests (requires Docker or Podman)
 test-integration:
 	@echo "Running integration tests..."
 	@eval `cat .env`
-	$(GO) test -tags integration -v -timeout 10m ./tests/integration/...
+	$(GO) test -tags integration -timeout 10m ./tests/integration/...
 
 # Run tests with verbose output
 test-verbose:
