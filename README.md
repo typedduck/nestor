@@ -304,6 +304,62 @@ modules.Command(b, "bundle install",
     modules.OnlyIf("test -f /opt/app/Gemfile"))
 ```
 
+### Controller Phases in the Go API
+
+The `pre:` and `post:` phases available in YAML playbooks can be used programmatically by populating `Deployment.Pre` and `Deployment.Post` with playbooks built the same way as the remote playbook — using `builder.New` and the `modules.Command`, `modules.Script`, and `modules.File` functions. Only these three action types are valid in controller phases.
+
+```go
+package main
+
+import (
+    "log"
+
+    "github.com/typedduck/nestor/controller/executor"
+    "github.com/typedduck/nestor/modules"
+    "github.com/typedduck/nestor/playbook/builder"
+)
+
+func deployWithPhases() {
+    // pre: phase — runs on the controller before packaging
+    pre := builder.New("myapp-pre")
+    modules.Command(pre, "make build")
+    modules.Command(pre, "vault read -field=value secret/db > secrets/db.env",
+        modules.Creates("secrets/db.env"))
+
+    // remote playbook — packaged, signed, and executed on the remote host
+    remote := builder.New("myapp-deployment")
+    remote.SetEnv("ENVIRONMENT", "production")
+    modules.File(remote, "/opt/myapp/bin/myapp",
+        modules.FromFile("./build/myapp"),
+        modules.Mode(0755))
+    modules.Service(remote, "myapp", "restart")
+
+    // post: phase — runs on the controller only if the remote phase succeeded
+    post := builder.New("myapp-post")
+    modules.Command(post, "./scripts/smoke-test.sh --host app.example.com")
+    modules.Command(post, "./scripts/notify.sh deployed to production")
+
+    err := executor.Deploy(&executor.Deployment{
+        Pre:         pre.Playbook(),
+        Remote:      remote.Playbook(),
+        Post:        post.Playbook(),
+        PlaybookDir: ".",   // base directory for resolving file upload paths in pre/post
+    }, "deploy@app.example.com", &executor.Config{
+        SSHKeyPath: "~/.ssh/deploy_key",
+    })
+    if err != nil {
+        log.Fatalf("deployment failed: %v", err)
+    }
+}
+```
+
+**Constraints** that apply identically to YAML and the Go API:
+- Only `command`, `script`, and `file` actions are valid in `Pre` and `Post` builders.
+- `Post` runs only when the remote phase completes without error.
+- `DryRun: true` is rejected when `Pre` or `Post` is non-nil.
+
+A runnable example is available at [`examples/controller/main.go`](examples/controller/main.go).
+
 ### Advanced Module Example
 
 ```go

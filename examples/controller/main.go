@@ -15,7 +15,10 @@ func main() {
 	// Example 2: Full deployment with explicit executor configuration
 	fullDeploymentWithConfig()
 
-	// Example 3: Initialize a new remote system
+	// Example 3: Deployment with pre: and post: controller phases
+	deploymentWithPhases()
+
+	// Example 4: Initialize a new remote system
 	// initializeRemoteSystem()
 }
 
@@ -121,6 +124,50 @@ func fullDeploymentWithConfig() {
 		// SigningKeyPath: "/home/user/.ssh/nestor_signing_key",
 		// KnownHostsPath: "/home/user/.ssh/known_hosts",
 		// AgentPath:      "/usr/local/bin/nestor-agent",
+		SSHKeyPath: "./examples/user-ssh/id_nestor_ed25519",
+		DryRun:     true,
+	})
+	if err != nil {
+		log.Printf("[ERROR] %v", err)
+		log.Fatalln("[FATAL] deployment failed")
+	}
+}
+
+// deploymentWithPhases shows how to use pre: and post: controller phases with
+// the Go API.  Both phases run on the controller; only command, script, and
+// file actions are valid there.  The post: phase executes only when the remote
+// phase completes without error.
+func deploymentWithPhases() {
+	log.Println("[INFO ] deployment with pre: and post: phases")
+
+	// pre: phase — runs on the controller before the remote playbook is
+	// packaged.  Typical use-cases: compile the application, fetch secrets.
+	pre := builder.New("myapp-pre")
+	modules.Command(pre, "make build")
+	modules.Command(pre, "vault read -field=value secret/db > secrets/db.env",
+		modules.Creates("secrets/db.env"))
+
+	// remote playbook — packaged, signed, transferred, and executed on the
+	// remote host via the agent.
+	remote := builder.New("myapp-deployment")
+	remote.SetEnv("ENVIRONMENT", "production")
+	modules.File(remote, "/opt/myapp/bin/myapp",
+		modules.FromFile("./build/myapp"),
+		modules.Mode(0755))
+	modules.Service(remote, "myapp", "restart")
+
+	// post: phase — runs on the controller only when the remote phase
+	// succeeded.  Typical use-cases: smoke tests, notifications.
+	post := builder.New("myapp-post")
+	modules.Command(post, "./scripts/smoke-test.sh --host app.example.com")
+	modules.Command(post, "./scripts/notify.sh 'deployed to production'")
+
+	err := executor.Deploy(&executor.Deployment{
+		Pre:         pre.Playbook(),
+		Remote:      remote.Playbook(),
+		Post:        post.Playbook(),
+		PlaybookDir: ".", // base dir for resolving upload paths in pre/post
+	}, "deploy@app.example.com", &executor.Config{
 		SSHKeyPath: "./examples/user-ssh/id_nestor_ed25519",
 		DryRun:     true,
 	})
