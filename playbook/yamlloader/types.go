@@ -104,4 +104,5 @@ type ScriptAction struct {
 type ServiceAction struct {
 	Name   string `yaml:"name"`
 	Action string `yaml:"action"`
+	RunAs  string `yaml:"run_as"`
 }

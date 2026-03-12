@@ -5,6 +5,7 @@ package yamlloader
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"strconv"
 	"strings"
 
@@ -62,12 +63,8 @@ func Load(data []byte, vars map[string]string) (*LoadResult, error) {
 
 	// Merge vars: YAML vars are the baseline; CLI vars override.
 	merged := make(map[string]string, len(raw.Vars)+len(vars))
-	for k, v := range raw.Vars {
-		merged[k] = v
-	}
-	for k, v := range vars {
-		merged[k] = v
-	}
+	maps.Copy(merged, raw.Vars)
+	maps.Copy(merged, vars)
 
 	// Apply variable substitution to the raw bytes, then re-parse.
 	substituted := applyVars(data, merged)
@@ -475,9 +472,14 @@ func loadService(b *builder.Builder, node *yaml3.Node) error {
 		return fmt.Errorf("unknown service action %q (valid: start, stop, restart, reload)", s.Action)
 	}
 
+	params := map[string]any{"name": s.Name}
+	if s.RunAs != "" {
+		params["run_as"] = s.RunAs
+	}
+
 	b.AddAction(playbook.Action{
 		Type:   "service." + s.Action,
-		Params: map[string]any{"name": s.Name},
+		Params: params,
 	})
 	return nil
 }

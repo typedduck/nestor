@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/typedduck/nestor/agent/executor"
@@ -39,6 +40,14 @@ func svcAction(name, op string) playbook.Action {
 		ID:     "test-svc",
 		Type:   "service." + op,
 		Params: map[string]any{"name": name},
+	}
+}
+
+func svcActionRunAs(name, op, runAs string) playbook.Action {
+	return playbook.Action{
+		ID:     "test-svc",
+		Type:   "service." + op,
+		Params: map[string]any{"name": name, "run_as": runAs},
 	}
 }
 
@@ -386,6 +395,99 @@ func TestServiceStart_Sysvinit(t *testing.T) {
 	// Start call: /etc/init.d/nginx start
 	if calls[1].Args[0] != "start" {
 		t.Errorf("expected 'start' arg in call 1, got %v", calls[1].Args)
+	}
+}
+
+// --- RunAs tests ---
+
+func TestServiceRestart_RunAs_RequiresSystemd(t *testing.T) {
+	for _, initSystem := range []string{"sysvinit", "openrc"} {
+		t.Run(initSystem, func(t *testing.T) {
+			h := NewServiceRestartHandler()
+			cmd := executortest.NewMockCommandRunner()
+			ctx := &executor.ExecutionContext{
+				SystemInfo: &executor.Info{InitSystem: initSystem},
+				FS:         executortest.NewMockFileSystem(),
+				Cmd:        cmd,
+			}
+			result := h.Execute(svcActionRunAs("myapp", "restart", "alice"), ctx)
+			if result.Status != "failed" {
+				t.Fatalf("expected failed for RunAs on %s, got %s", initSystem, result.Status)
+			}
+			if len(cmd.Calls()) != 0 {
+				t.Fatal("no commands should be invoked when RunAs is rejected")
+			}
+		})
+	}
+}
+
+func TestServiceRestart_RunAs_Systemd_UsesSudo(t *testing.T) {
+	h := NewServiceRestartHandler()
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("sudo", executortest.MockCommandResponse{ExitCode: 0})
+	result := h.Execute(svcActionRunAs("myapp", "restart", "alice"), systemdContext(cmd))
+	if result.Status != "success" {
+		t.Fatalf("expected success, got %s: %s", result.Status, result.Error)
+	}
+	if !result.Changed {
+		t.Fatal("expected Changed=true for restart")
+	}
+	calls := cmd.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 call, got %d", len(calls))
+	}
+	if calls[0].Name != "sudo" {
+		t.Errorf("expected 'sudo', got %s", calls[0].Name)
+	}
+	if len(calls[0].Args) < 2 || calls[0].Args[0] != "-u" || calls[0].Args[1] != "alice" {
+		t.Errorf("expected sudo -u alice ..., got %v", calls[0].Args)
+	}
+}
+
+func TestServiceReload_RunAs_Systemd_UsesSudo(t *testing.T) {
+	h := NewServiceReloadHandler()
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("sudo", executortest.MockCommandResponse{ExitCode: 0})
+	result := h.Execute(svcActionRunAs("myapp", "reload", "alice"), systemdContext(cmd))
+	if result.Status != "success" {
+		t.Fatalf("expected success, got %s: %s", result.Status, result.Error)
+	}
+	calls := cmd.Calls()
+	if len(calls) != 1 || calls[0].Name != "sudo" {
+		t.Fatalf("expected 1 sudo call, got %v", calls)
+	}
+	// Verify the shell command contains --user and the service name.
+	shellCmd := calls[0].Args[len(calls[0].Args)-1]
+	for _, want := range []string{"--user", "reload", "myapp"} {
+		if !strings.Contains(shellCmd, want) {
+			t.Errorf("shell command %q missing %q", shellCmd, want)
+		}
+	}
+}
+
+func TestServiceStart_RunAs_Systemd_BothCallsUseSudo(t *testing.T) {
+	h := NewServiceStartHandler()
+	cmd := executortest.NewMockCommandRunner()
+	// Both is-active check and start call go through "sudo".
+	cmd.SetResponses("sudo",
+		executortest.MockCommandResponse{ExitCode: 1}, // is-active --quiet → not active
+		executortest.MockCommandResponse{ExitCode: 0}, // start → success
+	)
+	result := h.Execute(svcActionRunAs("myapp", "start", "alice"), systemdContext(cmd))
+	if result.Status != "success" || !result.Changed {
+		t.Fatalf("expected success+changed, got %s changed=%v: %s", result.Status, result.Changed, result.Error)
+	}
+	calls := cmd.Calls()
+	if len(calls) != 2 {
+		t.Fatalf("expected 2 sudo calls, got %d", len(calls))
+	}
+	for i, call := range calls {
+		if call.Name != "sudo" {
+			t.Errorf("call[%d]: expected sudo, got %s", i, call.Name)
+		}
+		if call.Args[0] != "-u" || call.Args[1] != "alice" {
+			t.Errorf("call[%d]: expected -u alice, got %v", i, call.Args)
+		}
 	}
 }
 

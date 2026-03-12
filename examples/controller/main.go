@@ -154,7 +154,10 @@ func deploymentWithPhases() {
 	modules.File(remote, "/opt/myapp/bin/myapp",
 		modules.FromFile("./build/myapp"),
 		modules.Mode(0755))
+	// Restart the system-level service, then reload the user-level service as
+	// alice (systemd --user session).
 	modules.Service(remote, "myapp", "restart")
+	modules.Service(remote, "myapp-user", "reload", modules.RunAs("alice"))
 
 	// post: phase — runs on the controller only when the remote phase
 	// succeeded.  Typical use-cases: smoke tests, notifications.

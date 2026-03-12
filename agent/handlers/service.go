@@ -7,9 +7,25 @@ import (
 	"github.com/typedduck/nestor/playbook"
 )
 
+// serviceUserCmd builds the sudo-wrapped command for running systemctl --user
+// as a specific user. The XDG_RUNTIME_DIR is resolved on the remote host via
+// $(id -u) so that systemctl can reach the user's D-Bus socket.
+func serviceUserCmd(runAs, op, name string) (string, []string) {
+	shellCmd := fmt.Sprintf(
+		"XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user %s %s",
+		op, name,
+	)
+	return "sudo", []string{"-u", runAs, "/bin/sh", "-c", shellCmd}
+}
+
 // serviceCommand returns the command name and argument list for the given
 // init system, service name, and operation.
-func serviceCommand(initSystem, name, op string) (string, []string, error) {
+func serviceCommand(initSystem, name, op, runAs string) (string, []string, error) {
+	if runAs != "" {
+		// Already validated that initSystem == "systemd" before this call.
+		cmd, args := serviceUserCmd(runAs, op, name)
+		return cmd, args, nil
+	}
 	switch initSystem {
 	case "systemd":
 		return "systemctl", []string{op, name}, nil
@@ -24,22 +40,27 @@ func serviceCommand(initSystem, name, op string) (string, []string, error) {
 
 // serviceIsActive reports whether the named service is currently running.
 // It returns true when the status command exits with code 0.
-func serviceIsActive(cmd executor.CommandRunner, initSystem, name string) (bool, error) {
+func serviceIsActive(cmd executor.CommandRunner, initSystem, name, runAs string) (bool, error) {
 	var cmdName string
 	var args []string
 
-	switch initSystem {
-	case "systemd":
-		cmdName = "systemctl"
-		args = []string{"is-active", "--quiet", name}
-	case "sysvinit":
-		cmdName = "/etc/init.d/" + name
-		args = []string{"status"}
-	case "openrc":
-		cmdName = "rc-service"
-		args = []string{name, "status"}
-	default:
-		return false, fmt.Errorf("unsupported init system: %s", initSystem)
+	if runAs != "" {
+		// Already validated that initSystem == "systemd" before this call.
+		cmdName, args = serviceUserCmd(runAs, "is-active --quiet", name)
+	} else {
+		switch initSystem {
+		case "systemd":
+			cmdName = "systemctl"
+			args = []string{"is-active", "--quiet", name}
+		case "sysvinit":
+			cmdName = "/etc/init.d/" + name
+			args = []string{"status"}
+		case "openrc":
+			cmdName = "rc-service"
+			args = []string{name, "status"}
+		default:
+			return false, fmt.Errorf("unsupported init system: %s", initSystem)
+		}
 	}
 
 	_, exitCode, err := cmd.CombinedOutput(cmdName, nil, args...)
@@ -78,6 +99,15 @@ func (h *ServiceStartHandler) Execute(action playbook.Action,
 		}
 	}
 
+	runAs := getStringParam(action.Params, "run_as", "")
+	if runAs != "" && initSystem != "systemd" {
+		return executor.ActionResult{
+			Status: "failed", Changed: false,
+			Message: fmt.Sprintf("RunAs requires systemd, got %s", initSystem),
+			Error:   "run_as is only supported with the systemd init system",
+		}
+	}
+
 	if context.DryRun {
 		return executor.ActionResult{
 			Status:  "success",
@@ -86,7 +116,7 @@ func (h *ServiceStartHandler) Execute(action playbook.Action,
 		}
 	}
 
-	active, err := serviceIsActive(context.Cmd, initSystem, name)
+	active, err := serviceIsActive(context.Cmd, initSystem, name, runAs)
 	if err != nil {
 		return executor.ActionResult{
 			Status: "failed", Changed: false,
@@ -102,7 +132,7 @@ func (h *ServiceStartHandler) Execute(action playbook.Action,
 		}
 	}
 
-	cmdName, args, err := serviceCommand(initSystem, name, "start")
+	cmdName, args, err := serviceCommand(initSystem, name, "start", runAs)
 	if err != nil {
 		return executor.ActionResult{Status: "failed", Error: err.Error()}
 	}
@@ -151,6 +181,15 @@ func (h *ServiceStopHandler) Execute(action playbook.Action,
 		}
 	}
 
+	runAs := getStringParam(action.Params, "run_as", "")
+	if runAs != "" && initSystem != "systemd" {
+		return executor.ActionResult{
+			Status: "failed", Changed: false,
+			Message: fmt.Sprintf("RunAs requires systemd, got %s", initSystem),
+			Error:   "run_as is only supported with the systemd init system",
+		}
+	}
+
 	if context.DryRun {
 		return executor.ActionResult{
 			Status:  "success",
@@ -159,7 +198,7 @@ func (h *ServiceStopHandler) Execute(action playbook.Action,
 		}
 	}
 
-	active, err := serviceIsActive(context.Cmd, initSystem, name)
+	active, err := serviceIsActive(context.Cmd, initSystem, name, runAs)
 	if err != nil {
 		return executor.ActionResult{
 			Status: "failed", Changed: false,
@@ -175,7 +214,7 @@ func (h *ServiceStopHandler) Execute(action playbook.Action,
 		}
 	}
 
-	cmdName, args, err := serviceCommand(initSystem, name, "stop")
+	cmdName, args, err := serviceCommand(initSystem, name, "stop", runAs)
 	if err != nil {
 		return executor.ActionResult{Status: "failed", Error: err.Error()}
 	}
@@ -224,6 +263,15 @@ func (h *ServiceRestartHandler) Execute(action playbook.Action,
 		}
 	}
 
+	runAs := getStringParam(action.Params, "run_as", "")
+	if runAs != "" && initSystem != "systemd" {
+		return executor.ActionResult{
+			Status: "failed", Changed: false,
+			Message: fmt.Sprintf("RunAs requires systemd, got %s", initSystem),
+			Error:   "run_as is only supported with the systemd init system",
+		}
+	}
+
 	if context.DryRun {
 		return executor.ActionResult{
 			Status:  "success",
@@ -232,7 +280,7 @@ func (h *ServiceRestartHandler) Execute(action playbook.Action,
 		}
 	}
 
-	cmdName, args, err := serviceCommand(initSystem, name, "restart")
+	cmdName, args, err := serviceCommand(initSystem, name, "restart", runAs)
 	if err != nil {
 		return executor.ActionResult{Status: "failed", Error: err.Error()}
 	}
@@ -281,6 +329,15 @@ func (h *ServiceReloadHandler) Execute(action playbook.Action,
 		}
 	}
 
+	runAs := getStringParam(action.Params, "run_as", "")
+	if runAs != "" && initSystem != "systemd" {
+		return executor.ActionResult{
+			Status: "failed", Changed: false,
+			Message: fmt.Sprintf("RunAs requires systemd, got %s", initSystem),
+			Error:   "run_as is only supported with the systemd init system",
+		}
+	}
+
 	if context.DryRun {
 		return executor.ActionResult{
 			Status:  "success",
@@ -289,7 +346,7 @@ func (h *ServiceReloadHandler) Execute(action playbook.Action,
 		}
 	}
 
-	cmdName, args, err := serviceCommand(initSystem, name, "reload")
+	cmdName, args, err := serviceCommand(initSystem, name, "reload", runAs)
 	if err != nil {
 		return executor.ActionResult{Status: "failed", Error: err.Error()}
 	}

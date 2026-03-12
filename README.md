@@ -259,9 +259,23 @@ modules.Service(b, "nginx", "reload")
 
 // Restart a service (always acts)
 modules.Service(b, "postgresql", "restart")
+
+// Run as a specific user — targets the user's systemd session (systemd only)
+modules.Service(b, "myapp", "restart", modules.RunAs("alice"))
+modules.Service(b, "myapp", "reload", modules.RunAs("alice"))
 ```
 
 The Service module detects the init system (systemd, sysvinit, openrc) and executes the appropriate command.
+
+#### `RunAs` option
+
+`RunAs(user)` targets the named user's **systemd user session** (`systemctl --user`) rather than the system-level service manager. The agent wraps the command as:
+
+```
+sudo -u <user> /bin/sh -c "XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user <op> <name>"
+```
+
+This makes `$(id -u)` evaluate on the remote host in the user's context, so no UID is needed at playbook-build time. The option is **systemd-only** — the action fails at runtime on sysvinit or openrc.
 
 ### Command Module
 
@@ -512,6 +526,12 @@ actions:
   - service:
       name: nginx
       action: start
+
+  # Run as a specific user — targets the user's systemd session (systemd only)
+  - service:
+      name: myapp
+      action: reload
+      run_as: alice
 
 # Optional: runs on the controller after remote succeeds (command, script, file only)
 post:
@@ -935,6 +955,7 @@ nestor is in active early development. The core architecture is established, but
 - ✅ Package management (apt, yum, dnf, Homebrew on macOS)
 - ✅ File operations (content, upload, template, symlink, remove, directory)
 - ✅ Service management (systemd, sysvinit, openrc)
+- ✅ `RunAs` option for service actions — run `systemctl --user` as a specific user
 - ✅ Command and script execution
 - ✅ Dry-run mode
 - ✅ YAML playbook format with `nestor apply`
@@ -945,7 +966,7 @@ nestor is in active early development. The core architecture is established, but
 ### Planned
 
 - 📋 User and group management
-- 📋 Command options: `RunAs`, `Unless`, `OnlyIf`
+- 📋 Command options: `Unless`, `OnlyIf`, `RunAs`
 - 📋 Plugin system for custom modules
 - 📋 Parallel execution across multiple hosts
 - 📋 Inventory management

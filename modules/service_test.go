@@ -118,3 +118,31 @@ func TestServiceEmptyName(t *testing.T) {
 		t.Fatalf("Expected 1 action, got %d", len(b.Playbook().Actions))
 	}
 }
+
+func TestService_RunAs(t *testing.T) {
+	b := builder.New("test-playbook")
+
+	err := Service(b, "myapp", "restart", RunAs("alice"))
+	if err != nil {
+		t.Fatalf("Service with RunAs failed: %v", err)
+	}
+
+	action := b.Playbook().Actions[0]
+	if action.Type != "service.restart" {
+		t.Errorf("Expected type 'service.restart', got '%s'", action.Type)
+	}
+	if runAs, ok := action.Params["run_as"].(string); !ok || runAs != "alice" {
+		t.Errorf("Expected run_as='alice', got %v", action.Params["run_as"])
+	}
+}
+
+func TestService_RunAs_NotSetByDefault(t *testing.T) {
+	b := builder.New("test-playbook")
+
+	Service(b, "nginx", "reload")
+
+	action := b.Playbook().Actions[0]
+	if _, ok := action.Params["run_as"]; ok {
+		t.Error("run_as param should not be present when RunAs option is not used")
+	}
+}
