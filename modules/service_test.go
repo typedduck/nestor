@@ -146,3 +146,56 @@ func TestService_RunAs_NotSetByDefault(t *testing.T) {
 		t.Error("run_as param should not be present when RunAs option is not used")
 	}
 }
+
+func TestDaemonReload_SystemLevel(t *testing.T) {
+	b := builder.New("test-playbook")
+
+	err := DaemonReload(b)
+	if err != nil {
+		t.Fatalf("DaemonReload failed: %v", err)
+	}
+
+	actions := b.Playbook().Actions
+	if len(actions) != 1 {
+		t.Fatalf("Expected 1 action, got %d", len(actions))
+	}
+
+	action := actions[0]
+	if action.Type != "service.daemon-reload" {
+		t.Errorf("Expected type 'service.daemon-reload', got '%s'", action.Type)
+	}
+	if _, ok := action.Params["run_as"]; ok {
+		t.Error("run_as param should not be present for system-level daemon-reload")
+	}
+	if _, ok := action.Params["name"]; ok {
+		t.Error("name param should not be present for daemon-reload")
+	}
+}
+
+func TestDaemonReload_RunAs(t *testing.T) {
+	b := builder.New("test-playbook")
+
+	err := DaemonReload(b, RunAs("alice"))
+	if err != nil {
+		t.Fatalf("DaemonReload with RunAs failed: %v", err)
+	}
+
+	action := b.Playbook().Actions[0]
+	if action.Type != "service.daemon-reload" {
+		t.Errorf("Expected type 'service.daemon-reload', got '%s'", action.Type)
+	}
+	if runAs, ok := action.Params["run_as"].(string); !ok || runAs != "alice" {
+		t.Errorf("Expected run_as='alice', got %v", action.Params["run_as"])
+	}
+}
+
+func TestDaemonReload_RunAs_NotSetByDefault(t *testing.T) {
+	b := builder.New("test-playbook")
+
+	DaemonReload(b)
+
+	action := b.Playbook().Actions[0]
+	if _, ok := action.Params["run_as"]; ok {
+		t.Error("run_as param should not be present when RunAs option is not used")
+	}
+}

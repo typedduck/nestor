@@ -301,6 +301,80 @@ func (h *ServiceRestartHandler) Execute(action playbook.Action,
 	}
 }
 
+// --- ServiceDaemonReloadHandler ---
+
+// ServiceDaemonReloadHandler runs systemctl daemon-reload on the system daemon
+// or, when RunAs is set, on the named user's systemd session via
+// systemctl --user daemon-reload. The action is systemd-only.
+type ServiceDaemonReloadHandler struct{}
+
+func NewServiceDaemonReloadHandler() *ServiceDaemonReloadHandler {
+	return &ServiceDaemonReloadHandler{}
+}
+
+func (h *ServiceDaemonReloadHandler) Execute(action playbook.Action,
+	context *executor.ExecutionContext) executor.ActionResult {
+
+	initSystem := context.SystemInfo.InitSystem
+	if initSystem != "systemd" {
+		return executor.ActionResult{
+			Status: "failed", Changed: false,
+			Message: fmt.Sprintf("daemon-reload requires systemd, got %s", initSystem),
+			Error:   "service.daemon-reload is only supported with the systemd init system",
+		}
+	}
+
+	runAs := getStringParam(action.Params, "run_as", "")
+
+	if context.DryRun {
+		if runAs != "" {
+			return executor.ActionResult{
+				Status:  "success",
+				Changed: true,
+				Message: fmt.Sprintf("Would run systemctl --user daemon-reload as %s", runAs),
+			}
+		}
+		return executor.ActionResult{
+			Status:  "success",
+			Changed: true,
+			Message: "Would run systemctl daemon-reload",
+		}
+	}
+
+	var cmdName string
+	var args []string
+	if runAs != "" {
+		shellCmd := "XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user daemon-reload"
+		cmdName = "sudo"
+		args = []string{"-u", runAs, "/bin/sh", "-c", shellCmd}
+	} else {
+		cmdName = "systemctl"
+		args = []string{"daemon-reload"}
+	}
+
+	output, _, err := context.Cmd.CombinedOutput(cmdName, nil, args...)
+	if err != nil {
+		return executor.ActionResult{
+			Status: "failed", Changed: false,
+			Message: "Failed to run daemon-reload",
+			Error:   fmt.Sprintf("%s: %s", err.Error(), string(output)),
+		}
+	}
+
+	if runAs != "" {
+		return executor.ActionResult{
+			Status:  "success",
+			Changed: true,
+			Message: fmt.Sprintf("Ran systemctl --user daemon-reload as %s", runAs),
+		}
+	}
+	return executor.ActionResult{
+		Status:  "success",
+		Changed: true,
+		Message: "Ran systemctl daemon-reload",
+	}
+}
+
 // --- ServiceReloadHandler ---
 
 // ServiceReloadHandler always reloads the named service's configuration.

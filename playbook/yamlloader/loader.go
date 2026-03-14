@@ -452,24 +452,38 @@ func loadScript(b *builder.Builder, node *yaml3.Node) error {
 	return nil
 }
 
-// loadService handles service.{start,stop,restart,reload} actions.
+// loadService handles service.{start,stop,restart,reload,daemon-reload} actions.
 func loadService(b *builder.Builder, node *yaml3.Node) error {
 	var s ServiceAction
 	if err := node.Decode(&s); err != nil {
 		return fmt.Errorf("failed to decode service action: %w", err)
 	}
 
-	if s.Name == "" {
-		return fmt.Errorf("service action requires name")
-	}
 	if s.Action == "" {
 		return fmt.Errorf("service action requires action")
+	}
+
+	// daemon-reload operates on the whole daemon, not a named unit.
+	if s.Action == "daemon-reload" {
+		params := map[string]any{}
+		if s.RunAs != "" {
+			params["run_as"] = s.RunAs
+		}
+		b.AddAction(playbook.Action{
+			Type:   "service.daemon-reload",
+			Params: params,
+		})
+		return nil
+	}
+
+	if s.Name == "" {
+		return fmt.Errorf("service action requires name")
 	}
 
 	switch s.Action {
 	case "start", "stop", "restart", "reload":
 	default:
-		return fmt.Errorf("unknown service action %q (valid: start, stop, restart, reload)", s.Action)
+		return fmt.Errorf("unknown service action %q (valid: start, stop, restart, reload, daemon-reload)", s.Action)
 	}
 
 	params := map[string]any{"name": s.Name}

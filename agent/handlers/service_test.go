@@ -369,6 +369,128 @@ func TestServiceReload_AlwaysActs(t *testing.T) {
 	}
 }
 
+// --- ServiceDaemonReloadHandler tests ---
+
+func TestServiceDaemonReload_RequiresSystemd(t *testing.T) {
+	for _, initSystem := range []string{"sysvinit", "openrc"} {
+		t.Run(initSystem, func(t *testing.T) {
+			h := NewServiceDaemonReloadHandler()
+			cmd := executortest.NewMockCommandRunner()
+			ctx := &executor.ExecutionContext{
+				SystemInfo: &executor.Info{InitSystem: initSystem},
+				FS:         executortest.NewMockFileSystem(),
+				Cmd:        cmd,
+			}
+			action := playbook.Action{ID: "t", Type: "service.daemon-reload", Params: map[string]any{}}
+			result := h.Execute(action, ctx)
+			if result.Status != "failed" {
+				t.Fatalf("expected failed on %s, got %s", initSystem, result.Status)
+			}
+			if len(cmd.Calls()) != 0 {
+				t.Fatal("no commands should be invoked when init system is not systemd")
+			}
+		})
+	}
+}
+
+func TestServiceDaemonReload_DryRun_SystemLevel(t *testing.T) {
+	h := NewServiceDaemonReloadHandler()
+	cmd := executortest.NewMockCommandRunner()
+	ctx := systemdContext(cmd)
+	ctx.DryRun = true
+	action := playbook.Action{ID: "t", Type: "service.daemon-reload", Params: map[string]any{}}
+	result := h.Execute(action, ctx)
+	if result.Status != "success" || !result.Changed {
+		t.Fatalf("expected success+changed, got %s changed=%v", result.Status, result.Changed)
+	}
+	if len(cmd.Calls()) != 0 {
+		t.Fatal("dry run should not invoke any commands")
+	}
+}
+
+func TestServiceDaemonReload_DryRun_RunAs(t *testing.T) {
+	h := NewServiceDaemonReloadHandler()
+	cmd := executortest.NewMockCommandRunner()
+	ctx := systemdContext(cmd)
+	ctx.DryRun = true
+	action := playbook.Action{ID: "t", Type: "service.daemon-reload", Params: map[string]any{"run_as": "alice"}}
+	result := h.Execute(action, ctx)
+	if result.Status != "success" || !result.Changed {
+		t.Fatalf("expected success+changed, got %s changed=%v", result.Status, result.Changed)
+	}
+	if len(cmd.Calls()) != 0 {
+		t.Fatal("dry run should not invoke any commands")
+	}
+}
+
+func TestServiceDaemonReload_SystemLevel(t *testing.T) {
+	h := NewServiceDaemonReloadHandler()
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("systemctl", executortest.MockCommandResponse{ExitCode: 0})
+	action := playbook.Action{ID: "t", Type: "service.daemon-reload", Params: map[string]any{}}
+	result := h.Execute(action, systemdContext(cmd))
+	if result.Status != "success" {
+		t.Fatalf("expected success, got %s: %s", result.Status, result.Error)
+	}
+	if !result.Changed {
+		t.Fatal("expected Changed=true for daemon-reload")
+	}
+	calls := cmd.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 call, got %d", len(calls))
+	}
+	if calls[0].Name != "systemctl" {
+		t.Errorf("expected systemctl, got %s", calls[0].Name)
+	}
+	if len(calls[0].Args) < 1 || calls[0].Args[0] != "daemon-reload" {
+		t.Errorf("expected 'daemon-reload' arg, got %v", calls[0].Args)
+	}
+}
+
+func TestServiceDaemonReload_RunAs_UsesSudo(t *testing.T) {
+	h := NewServiceDaemonReloadHandler()
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("sudo", executortest.MockCommandResponse{ExitCode: 0})
+	action := playbook.Action{ID: "t", Type: "service.daemon-reload", Params: map[string]any{"run_as": "alice"}}
+	result := h.Execute(action, systemdContext(cmd))
+	if result.Status != "success" {
+		t.Fatalf("expected success, got %s: %s", result.Status, result.Error)
+	}
+	if !result.Changed {
+		t.Fatal("expected Changed=true for daemon-reload")
+	}
+	calls := cmd.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 call, got %d", len(calls))
+	}
+	if calls[0].Name != "sudo" {
+		t.Errorf("expected sudo, got %s", calls[0].Name)
+	}
+	if len(calls[0].Args) < 2 || calls[0].Args[0] != "-u" || calls[0].Args[1] != "alice" {
+		t.Errorf("expected sudo -u alice ..., got %v", calls[0].Args)
+	}
+	shellCmd := calls[0].Args[len(calls[0].Args)-1]
+	for _, want := range []string{"--user", "daemon-reload", "XDG_RUNTIME_DIR"} {
+		if !strings.Contains(shellCmd, want) {
+			t.Errorf("shell command %q missing %q", shellCmd, want)
+		}
+	}
+}
+
+func TestServiceDaemonReload_CommandFails(t *testing.T) {
+	h := NewServiceDaemonReloadHandler()
+	cmd := executortest.NewMockCommandRunner()
+	cmd.SetResponse("systemctl", executortest.MockCommandResponse{
+		ExitCode: 1,
+		Output:   []byte("failed to reload daemon"),
+	})
+	action := playbook.Action{ID: "t", Type: "service.daemon-reload", Params: map[string]any{}}
+	result := h.Execute(action, systemdContext(cmd))
+	if result.Status != "failed" {
+		t.Fatalf("expected failed when daemon-reload fails, got %s", result.Status)
+	}
+}
+
 // --- sysvinit smoke tests ---
 
 func TestServiceStart_Sysvinit(t *testing.T) {

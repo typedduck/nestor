@@ -68,3 +68,31 @@ func Service(b *builder.Builder, name, operation string, opts ...ServiceOption) 
 	})
 	return nil
 }
+
+// DaemonReload adds a systemctl daemon-reload action to the playbook.
+// Without RunAs it reloads the system-level daemon; with RunAs it targets
+// the named user's systemd session (systemctl --user daemon-reload).
+//
+// The action is systemd-only — it fails at runtime on sysvinit or openrc.
+//
+// Examples:
+//
+//	modules.DaemonReload(b)                         // system daemon-reload
+//	modules.DaemonReload(b, modules.RunAs("alice"))  // user daemon-reload
+func DaemonReload(b *builder.Builder, opts ...ServiceOption) error {
+	cfg := &serviceConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
+	params := map[string]any{}
+	if cfg.runAs != "" {
+		params["run_as"] = cfg.runAs
+	}
+
+	b.AddAction(playbook.Action{
+		Type:   "service.daemon-reload",
+		Params: params,
+	})
+	return nil
+}

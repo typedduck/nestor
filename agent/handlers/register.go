@@ -10,6 +10,7 @@ func RegisterAll(engine *executor.Engine) {
 	engine.RegisterHandler("service.stop", NewServiceStopHandler())
 	engine.RegisterHandler("service.reload", NewServiceReloadHandler())
 	engine.RegisterHandler("service.restart", NewServiceRestartHandler())
+	engine.RegisterHandler("service.daemon-reload", NewServiceDaemonReloadHandler())
 }
 
 // RegisterLocal registers the handlers appropriate for local execution.
