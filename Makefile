@@ -18,7 +18,7 @@ LDFLAGS=-ldflags "-s -w -X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X m
 # Agent linker flags: strip debug symbols and DWARF to minimize binary size
 # AGENT_LDFLAGS=-ldflags "-s -w -X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.BuildTime=$(BUILD_TIME)"
 
-.PHONY: all clean test test-integration build build-controller build-agent install help
+.PHONY: all clean clean-testcache test test-integration build build-controller build-agent install help
 
 all: build
 
@@ -32,6 +32,7 @@ help:
 	@echo "  test-verbose      - Run tests with verbose output"
 	@echo "  coverage          - Generate test coverage report"
 	@echo "  clean             - Remove build artifacts"
+	@echo "  clean-testcache   - Invalidate and delete all cached test results"
 	@echo "  install           - Install binaries to GOPATH/bin"
 	@echo "  example-package   - Run the package example"
 	@echo "  example-file      - Run the file example"
@@ -70,8 +71,7 @@ test:
 # Run integration tests (requires Docker or Podman)
 test-integration:
 	@echo "Running integration tests..."
-	@eval `cat .env`
-	$(GO) test -tags integration -timeout 10m ./tests/integration/...
+	@eval $$(cat .env) && $(GO) test -tags integration -timeout 10m ./tests/integration/...
 
 # Run tests with verbose output
 test-verbose:
@@ -103,6 +103,11 @@ clean:
 	@echo "Cleaning build artifacts..."
 	rm -rf $(BUILD_DIR)
 	rm -f coverage.out coverage.html
+
+# Invalidate and delete all cached test results
+clean-testcache:
+	@echo "Clearing test cache..."
+	$(GO) clean -testcache
 
 # Install binaries
 install:
