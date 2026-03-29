@@ -71,7 +71,7 @@ func buildAgentBinary() (string, error) {
 	tmpFile.Close()
 	binPath := tmpFile.Name()
 
-	cmd := exec.Command("go", "build", "-o", binPath, "./cmd/agent")
+	cmd := exec.Command("go", "build", "-o", binPath, "./cmd/nestor-agent")
 	cmd.Dir = repoRoot
 	cmd.Env = append(os.Environ(),
 		"GOOS=linux",
