@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/user"
 	"strconv"
 	"syscall"
 
@@ -23,21 +24,29 @@ func chown(fs executor.FileSystem, path, owner, group string) error {
 	uid := int(sys.Uid)
 	gid := int(sys.Gid)
 
-	// Look up owner UID if specified
+	// Look up owner UID if specified — accept numeric or symbolic name.
 	if owner != "" {
-		// TODO: Implement user lookup
-		// For now, assume owner is already a numeric UID
 		if ownerUID, err := strconv.Atoi(owner); err == nil {
 			uid = ownerUID
+		} else if u, err := user.Lookup(owner); err == nil {
+			if ownerUID, err := strconv.Atoi(u.Uid); err == nil {
+				uid = ownerUID
+			}
+		} else {
+			return fmt.Errorf("unknown user: %s", owner)
 		}
 	}
 
-	// Look up group GID if specified
+	// Look up group GID if specified — accept numeric or symbolic name.
 	if group != "" {
-		// TODO: Implement group lookup
-		// For now, assume group is already a numeric GID
 		if groupGID, err := strconv.Atoi(group); err == nil {
 			gid = groupGID
+		} else if g, err := user.LookupGroup(group); err == nil {
+			if groupGID, err := strconv.Atoi(g.Gid); err == nil {
+				gid = groupGID
+			}
+		} else {
+			return fmt.Errorf("unknown group: %s", group)
 		}
 	}
 
