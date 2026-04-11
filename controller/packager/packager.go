@@ -162,6 +162,32 @@ func (p *Packager) collectUploadFiles(pb *playbook.Playbook, uploadDir string) (
 			// Update action to reference the file in the upload directory
 			action.Params["source"] = "upload/" + destName
 		}
+
+		// Check for script actions
+		if action.Type == "script.execute" {
+			source, ok := action.Params["source"].(string)
+			if !ok {
+				continue
+			}
+
+			if seen[source] {
+				continue
+			}
+			seen[source] = true
+
+			// Copy script to upload directory
+			destName := filepath.Base(source)
+			destPath := filepath.Join(uploadDir, destName)
+
+			if err := copyFile(source, destPath); err != nil {
+				return nil, fmt.Errorf("failed to copy %s: %w", source, err)
+			}
+
+			files = append(files, "upload/"+destName)
+
+			// Update action to reference the script in the upload directory
+			action.Params["source"] = "upload/" + destName
+		}
 	}
 
 	return files, nil
