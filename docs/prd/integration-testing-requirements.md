@@ -1,10 +1,10 @@
 ---
 title: "Integration Testing Requirements"
 type: feature
-status: draft
-version: "1.0"
+status: implemented
+version: "1.3"
 created: 2026-03-22
-updated: 2026-03-22
+updated: 2026-04-11
 author: marc
 ---
 
@@ -59,6 +59,8 @@ Nestor's agent executes playbook actions on remote hosts. Unit tests can verify 
 **FR-07:** Tests that depend on prior shared container state shall declare that dependency explicitly. Suite-level setup steps (e.g. installing a package needed by a group of tests) shall be performed inside `TestMain`, before `m.Run()` is called, in the order required by the tests that follow.
 
 **FR-08:** When a new module test requires additional packages to be present in the container, the developer adding those tests is responsible for updating the `Containerfile`.
+
+**FR-09:** Common test helper functions shall be extracted into a single shared file (`helpers_test.go`) within the integration test package. The `buildPlaybookArchive` function currently defined in `package_install_test.go` shall be moved there. All module test files shall use this shared helper rather than duplicating the implementation.
 
 ### Package Module (existing)
 
@@ -154,7 +156,7 @@ Test scripts shall be stored in `tests/integration/testdata/` and checked into t
 
 ## Acceptance Criteria
 
-- [ ] AC-01: All requirements FR-01 through FR-08 are implemented — the test infrastructure operates as specified
+- [ ] AC-01: All requirements FR-01 through FR-09 are implemented — the test infrastructure operates as specified
 - [ ] AC-02: All `package` module requirements (FR-10, FR-11) have passing test cases
 - [ ] AC-03: All `service` module requirements (FR-20 through FR-26) have passing test cases
 - [ ] AC-04: All `command` module requirements (FR-30 through FR-33) have passing test cases
@@ -174,4 +176,7 @@ Test scripts shall be stored in `tests/integration/testdata/` and checked into t
 
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
+| 1.3 | 2026-04-11 | marc | Status changed to implemented |
+| 1.2 | 2026-04-11 | marc | Status changed to approved |
+| 1.1 | 2026-04-11 | marc | Add FR-09: extract shared test helpers into helpers_test.go |
 | 1.0 | 2026-03-22 | marc | Initial draft |

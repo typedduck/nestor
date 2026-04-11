@@ -42,6 +42,12 @@ func runSuite(m *testing.M) int {
 	suite = s
 	defer s.teardown(context.Background())
 
+	// Stop cron before service tests begin so they start from a known stopped state.
+	if code, _, err := suite.exec(ctx, "systemctl", "stop", "cron"); err != nil || code != 0 {
+		fmt.Fprintf(os.Stderr, "suite setup: stop cron: code=%d err=%v\n", code, err)
+		return 1
+	}
+
 	return m.Run()
 }
 

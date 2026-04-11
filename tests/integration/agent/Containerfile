@@ -2,11 +2,18 @@ FROM debian:12
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
+        cron \
         systemd \
         systemd-sysv \
         dbus \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# Add ExecReload to cron.service — the Debian 12 unit omits it, which makes
+# "systemctl reload cron" return an error. The drop-in enables the reload test.
+RUN mkdir -p /etc/systemd/system/cron.service.d \
+    && printf '[Service]\nExecReload=/bin/true\n' \
+       > /etc/systemd/system/cron.service.d/reload.conf
 
 # Mask units that fail or are irrelevant inside a container
 RUN systemctl mask \

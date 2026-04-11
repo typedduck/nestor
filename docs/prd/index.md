@@ -14,4 +14,4 @@
 
 | File | Title | Type | Status | Version | Updated |
 |------|-------|------|--------|---------|---------|
-| [integration-testing-requirements.md](integration-testing-requirements.md) | Integration Testing Requirements | feature | draft | 1.0 | 2026-03-22 |
+| [integration-testing-requirements.md](integration-testing-requirements.md) | Integration Testing Requirements | feature | implemented | 1.3 | 2026-04-11 |
