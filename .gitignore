@@ -1,5 +1,6 @@
 .archived/
 .ssh/
+.zed/
 build/
 .bash_history
 .DS_Store
